@@ -181,9 +181,16 @@
             </div>
 
             <!-- Dropdown Site Destinasi Diperbaiki (Tanpa Tombol Link Maps Eksternal) -->
+            <!-- Site Destinasi -->
             <div>
               <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi</label>
               <select id="dispatchSiteSelect" onchange="updateWaPreview()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="SITE-PLM-014 (Ilir Barat)" selected>SITE-PLM-014 (Ilir Barat)</option>
+                <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
+                <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
+                <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
+                <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
+                <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
               </select>
             </div>
 
@@ -576,7 +583,12 @@
     function populateSiteOptions() {
       const sel = document.getElementById('dispatchSiteSelect');
       if (!sel) return;
-      sel.innerHTML = SITE_LOCATIONS.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+      // Jika select kosong karena alasan apapun, isi dari SITE_LOCATIONS
+      if (sel.options.length === 0) {
+        sel.innerHTML = SITE_LOCATIONS.map((s, idx) => 
+          `<option value="${s.name}" ${idx === 0 ? 'selected' : ''}>${s.name}</option>`
+        ).join('');
+      }
       updateWaPreview();
     }
 
@@ -1037,8 +1049,44 @@
         if (json.status === 'success' && Array.isArray(json.data)) {
           const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
           if (sheetRecords.length > 0) {
-            orderList = sheetRecords.reverse();
+            // 1. Perbarui Tabel Log Bawah
+            orderList = sheetRecords.slice().reverse();
             localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
+
+            // 2. Sinkronkan Tiket Aktif ke Tabel Status Armada Atas
+            fleetList.forEach(unit => {
+              // Ambil tugas terakhir untuk unit ini dari Sheet
+              const latestOrder = sheetRecords.slice().reverse().find(o => o.namaMbp.trim() === unit.namaMbp.trim());
+              
+              if (latestOrder && latestOrder.status !== 'Selesai' && latestOrder.status !== 'Idle') {
+                unit.status = latestOrder.status;
+                unit.activeOrderId = latestOrder.orderId;
+                unit.activeSite = latestOrder.siteDestinasi;
+                unit.activePriority = latestOrder.prioritas;
+                unit.estimasiEta = latestOrder.estimasiEta || '-';
+                unit.selisihOtwEta = latestOrder.selisihOtwEta || '-';
+                
+                // Pasang acuan waktu timer berjalan sesuai status terkini
+                if (latestOrder.status === 'Accept Order') unit.tsCurrentStatusStart = latestOrder.tsAccept;
+                else if (latestOrder.status === 'OTW to Site') unit.tsCurrentStatusStart = latestOrder.tsOtw;
+                else if (latestOrder.status === 'Onsite') unit.tsCurrentStatusStart = latestOrder.tsOnsite;
+              } else {
+                // Jika tiket terakhir sudah Selesai atau memang Idle
+                unit.status = 'Idle';
+                unit.activeOrderId = '-';
+                unit.activeSite = '-';
+                unit.activePriority = 'Low';
+                unit.estimasiEta = '-';
+                unit.selisihOtwEta = '-';
+                if (latestOrder && latestOrder.tsSelesai) {
+                  unit.tsCurrentStatusStart = latestOrder.tsSelesai;
+                  unit.tsIdleStart = latestOrder.tsSelesai;
+                }
+              }
+            });
+
+            localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
+            populateSelectDropdowns();
           }
           renderAll();
         }
