@@ -74,23 +74,80 @@
     <!-- ========================================== -->
     <section id="viewOmc" class="space-y-6">
       
-      <!-- Summary KPI Strip -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4">
-          <p class="text-xs text-slate-400 uppercase font-medium">Total Unit MBP</p>
-          <p id="kpiTotal" class="text-2xl font-bold font-mono text-white mt-1">0</p>
+      <!-- Summary KPI & Status Distribution Strip -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <!-- Total Unit MBP -->
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+            <p class="text-xs text-slate-400 uppercase font-medium">Total Unit MBP</p>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span id="kpiTotal" class="text-2xl font-bold font-mono text-white">0</span>
+              <span class="text-xs font-mono text-slate-400">Unit</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">100% Terdaftar</p>
+          </div>
+
+          <!-- Siaga (Idle) -->
+          <div class="bg-slate-950/70 border border-emerald-500/20 rounded-xl p-4">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-emerald-400 uppercase font-medium">Siaga (Idle)</p>
+              <span id="kpiIdlePct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">0%</span>
+            </div>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span id="kpiIdle" class="text-2xl font-bold font-mono text-emerald-400">0</span>
+              <span class="text-xs font-mono text-slate-400">Unit</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Standby & Siap Dispatch</p>
+          </div>
+
+          <!-- Mobilisasi (Accept / OTW) -->
+          <div class="bg-slate-950/70 border border-amber-500/20 rounded-xl p-4">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-amber-400 uppercase font-medium">Mobilisasi</p>
+              <span id="kpiMovingPct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">0%</span>
+            </div>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span id="kpiMoving" class="text-2xl font-bold font-mono text-amber-400">0</span>
+              <span class="text-xs font-mono text-slate-400">Unit</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Accept / OTW ke Site</p>
+          </div>
+
+          <!-- Aktif Backup (Onsite) -->
+          <div class="bg-slate-950/70 border border-sky-500/20 rounded-xl p-4">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-sky-400 uppercase font-medium">Onsite Backup</p>
+              <span id="kpiOnsitePct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">0%</span>
+            </div>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span id="kpiOnsite" class="text-2xl font-bold font-mono text-sky-400">0</span>
+              <span class="text-xs font-mono text-slate-400">Unit</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Catu Daya Aktif di Site</p>
+          </div>
         </div>
-        <div class="bg-slate-900/90 border border-emerald-500/20 rounded-xl p-4">
-          <p class="text-xs text-emerald-400 uppercase font-medium">Siaga (Idle)</p>
-          <p id="kpiIdle" class="text-2xl font-bold font-mono text-emerald-400 mt-1">0</p>
-        </div>
-        <div class="bg-slate-900/90 border border-amber-500/20 rounded-xl p-4">
-          <p class="text-xs text-amber-400 uppercase font-medium">Mobilisasi (Accept / OTW)</p>
-          <p id="kpiMoving" class="text-2xl font-bold font-mono text-amber-400 mt-1">0</p>
-        </div>
-        <div class="bg-slate-900/90 border border-sky-500/20 rounded-xl p-4">
-          <p class="text-xs text-sky-400 uppercase font-medium">Aktif Backup (Onsite)</p>
-          <p id="kpiOnsite" class="text-2xl font-bold font-mono text-sky-400 mt-1">0</p>
+
+        <!-- Visual Multi-segment Distribution Chart Bar -->
+        <div class="space-y-2 pt-2 border-t border-slate-800/80">
+          <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+            <span class="font-medium text-slate-300">Distribusi Status Unit MBP Real-Time</span>
+            <div class="flex items-center gap-3 text-[11px] font-mono">
+              <span class="flex items-center gap-1 text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Idle (<span id="distLabelIdle">0%</span>)
+              </span>
+              <span class="flex items-center gap-1 text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span> Mobilisasi (<span id="distLabelMoving">0%</span>)
+              </span>
+              <span class="flex items-center gap-1 text-sky-400">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span> Onsite (<span id="distLabelOnsite">0%</span>)
+              </span>
+            </div>
+          </div>
+          <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800 p-0.5 gap-0.5">
+            <div id="barIdle" class="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style="width: 0%" title="Idle"></div>
+            <div id="barMoving" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%" title="Mobilisasi"></div>
+            <div id="barOnsite" class="h-full bg-sky-500 rounded-r-full transition-all duration-500" style="width: 0%" title="Onsite"></div>
+          </div>
         </div>
       </div>
 
@@ -317,7 +374,6 @@
 
   <!-- APPLICATION LOGIC -->
   <script>
-    // Jika Anda ingin langsung hardcode URL Web App, isi di bawah ini:
     const DEFAULT_GAS_URL = '';
     const STORAGE_KEY_DATA = 'mbp_monitor_state_v1';
     const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
@@ -387,7 +443,6 @@
       ];
     }
 
-    // Ambil timestamp awal dari status yang sedang aktif
     function getActiveStatusStartIso(item) {
       if (item.status === 'Idle') return item.tsIdle;
       if (item.status === 'Accept Order') return item.tsAccept;
@@ -396,7 +451,6 @@
       return item.tsIdle;
     }
 
-    // Format milidetik ke "01h 24m 10s"
     function formatElapsed(startIso) {
       if (!startIso) return '00h 00m 00s';
       const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
@@ -407,7 +461,6 @@
       return `${hrs}h ${mins}m ${secs}s`;
     }
 
-    // Format ringkas untuk log durasi
     function formatShortDuration(ms) {
       if (!ms || ms < 0) return '00m 00s';
       const totalSec = Math.floor(ms / 1000);
@@ -418,7 +471,6 @@
       return h > 0 ? `${pad(h)}h ${pad(m)}m ${pad(s)}s` : `${pad(m)}m ${pad(s)}s`;
     }
 
-    // Styling Badge Status
     function getStatusBadgeHtml(status) {
       const styles = {
         'Idle': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
@@ -440,7 +492,6 @@
       </span>`;
     }
 
-    // Styling Badge Prioritas
     function getPriorityBadgeClass(prio) {
       const map = {
         'Critical': 'bg-rose-500/20 text-rose-400 border border-rose-500/40',
@@ -451,7 +502,6 @@
       return map[prio] || map['Low'];
     }
 
-    // Inisialisasi Data
     async function initApp() {
       updateConnectionBadge();
       const saved = localStorage.getItem(STORAGE_KEY_DATA);
@@ -469,16 +519,12 @@
         await syncFromServer(false);
       }
 
-      // Jalankan Real-Time Timer setiap 1 detik
       setInterval(tickRealtimeTimers, 1000);
-
-      // Auto-poll Google Sheets setiap 10 detik jika URL dikonfigurasi
       setInterval(() => {
         if (gasWebAppUrl) syncFromServer(false);
       }, 10000);
     }
 
-    // Sinkronisasi antar Tab Browser (jika OMC & MBP dibuka di 2 tab berbeda)
     window.addEventListener('storage', (e) => {
       if (e.key === STORAGE_KEY_DATA && e.newValue) {
         mbpList = JSON.parse(e.newValue);
@@ -497,7 +543,6 @@
       }
     }
 
-    // Populate Dropdown di Dashboard OMC & Mobile MBP
     function populateSelectDropdowns() {
       const omcSelect = document.getElementById('dispatchMbpSelect');
       const mobSelect = document.getElementById('mobileMbpSelect');
@@ -539,18 +584,42 @@
       }
     }
 
-    // Render seluruh komponen OMC & Mobile MBP
     function renderAll() {
       renderOmcDashboard();
       renderMobileMbpView();
     }
 
     function renderOmcDashboard() {
-      // Update KPI
-      document.getElementById('kpiTotal').textContent = mbpList.length;
-      document.getElementById('kpiIdle').textContent = mbpList.filter(m => m.status === 'Idle').length;
-      document.getElementById('kpiMoving').textContent = mbpList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
-      document.getElementById('kpiOnsite').textContent = mbpList.filter(m => m.status === 'Onsite').length;
+      const total = mbpList.length;
+      const idleCount = mbpList.filter(m => m.status === 'Idle').length;
+      const movingCount = mbpList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
+      const onsiteCount = mbpList.filter(m => m.status === 'Onsite').length;
+
+      // Hitung Persentase Relatif
+      const idlePct = total > 0 ? ((idleCount / total) * 100).toFixed(1) : '0.0';
+      const movingPct = total > 0 ? ((movingCount / total) * 100).toFixed(1) : '0.0';
+      const onsitePct = total > 0 ? ((onsiteCount / total) * 100).toFixed(1) : '0.0';
+
+      // Update Angka & Badge Persentase KPI
+      document.getElementById('kpiTotal').textContent = total;
+      
+      document.getElementById('kpiIdle').textContent = idleCount;
+      document.getElementById('kpiIdlePct').textContent = `${idlePct}%`;
+
+      document.getElementById('kpiMoving').textContent = movingCount;
+      document.getElementById('kpiMovingPct').textContent = `${movingPct}%`;
+
+      document.getElementById('kpiOnsite').textContent = onsiteCount;
+      document.getElementById('kpiOnsitePct').textContent = `${onsitePct}%`;
+
+      // Update Bar Chart Distribusi Visual
+      document.getElementById('barIdle').style.width = `${idlePct}%`;
+      document.getElementById('barMoving').style.width = `${movingPct}%`;
+      document.getElementById('barOnsite').style.width = `${onsitePct}%`;
+
+      document.getElementById('distLabelIdle').textContent = `${idlePct}%`;
+      document.getElementById('distLabelMoving').textContent = `${movingPct}%`;
+      document.getElementById('distLabelOnsite').textContent = `${onsitePct}%`;
 
       // Render Baris Tabel
       const tbody = document.getElementById('omcTableBody');
@@ -598,7 +667,6 @@
       const startIso = getActiveStatusStartIso(item);
       document.getElementById('mobileLiveTimer').textContent = formatElapsed(startIso);
 
-      // Highlight tombol status yang sedang aktif
       const statusMap = [
         { id: 'btnStatusIdle', name: 'Idle', activeCls: 'border-emerald-500 bg-emerald-500/20 text-white shadow-lg shadow-emerald-500/10' },
         { id: 'btnStatusAccept', name: 'Accept Order', activeCls: 'border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10' },
@@ -616,7 +684,6 @@
       });
     }
 
-    // Update hanya angka Timer setiap detik tanpa me-render ulang DOM tabel
     function tickRealtimeTimers() {
       mbpList.forEach((item, idx) => {
         const el = document.querySelector(`[data-timer-idx="${idx}"]`);
@@ -637,7 +704,6 @@
       renderMobileMbpView();
     }
 
-    // Role 2 Action: 1x Klik Update Status MBP
     async function updateMbpStatus(newStatus) {
       const idx = mbpList.findIndex(m => m.namaMbp === selectedMobileMbp);
       if (idx === -1) return;
@@ -647,7 +713,6 @@
       const nowIso = new Date().toISOString();
       const nowMs = Date.now();
 
-      // Hitung durasi status sebelumnya secara lokal (Optimistic Update)
       const prevStartIso = getActiveStatusStartIso(item);
       if (prevStartIso && prevStatus !== newStatus) {
         const elapsedMs = nowMs - new Date(prevStartIso).getTime();
@@ -674,12 +739,10 @@
       item.status = newStatus;
       saveAndBroadcast();
 
-      // Tampilkan indikator tersimpan
       const fb = document.getElementById('mobileSyncFeedback');
       fb.classList.remove('hidden');
       setTimeout(() => fb.classList.add('hidden'), 2000);
 
-      // Kirim POST ke Google Apps Script jika terhubung
       if (gasWebAppUrl) {
         await postToGas({
           action: 'updateStatus',
@@ -690,7 +753,6 @@
       }
     }
 
-    // Role 1 Action: Dispatch Tiket & Redirect ke WhatsApp
     async function handleDispatchSubmit(event) {
       event.preventDefault();
       const namaMbp = document.getElementById('dispatchMbpSelect').value;
@@ -707,7 +769,6 @@
       const pad = n => String(n).padStart(2, '0');
       const orderId = `ORD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-      // Update data lokal
       const idx = mbpList.findIndex(m => m.namaMbp === namaMbp);
       if (idx !== -1) {
         mbpList[idx].orderId = orderId;
@@ -717,12 +778,10 @@
         saveAndBroadcast();
       }
 
-      // Buka Link WhatsApp sesuai format yang diminta
       const waText = encodeURIComponent(`Ada masalah di site ${siteDestinasi}`);
       const waUrl = `https://wa.me/${rawWa}?text=${waText}`;
       window.open(waUrl, '_blank', 'noopener,noreferrer');
 
-      // Simpan ke Google Sheets di background
       if (gasWebAppUrl) {
         await postToGas({
           action: 'dispatchTicket',
@@ -743,7 +802,6 @@
       document.getElementById('lastSyncText').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
     }
 
-    // Komunikasi GET & POST dengan Google Apps Script
     async function syncFromServer(showSpinner = false) {
       if (!gasWebAppUrl) {
         document.getElementById('lastSyncText').textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
@@ -760,7 +818,7 @@
           saveAndBroadcast();
         }
       } catch (err) {
-        console.warn('Gagal mengambil data dari GAS, menggunakan state lokal:', err);
+        console.warn('Gagal mengambil data dari GAS:', err);
       } finally {
         if (showSpinner) icon.classList.remove('animate-spin');
       }
@@ -784,7 +842,6 @@
       }
     }
 
-    // Navigasi antar Role
     function switchRole(role) {
       activeRole = role;
       const viewOmc = document.getElementById('viewOmc');
@@ -806,7 +863,6 @@
       renderAll();
     }
 
-    // Modal Konfigurasi URL
     function toggleConfigModal() {
       const modal = document.getElementById('configModal');
       const input = document.getElementById('gasUrlInput');
