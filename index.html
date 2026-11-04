@@ -2,7 +2,7 @@
 <html lang="id" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>MBP Command & Field Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -22,163 +22,181 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
     body { background-color: #090d16; color: #f1f5f9; }
     .status-btn:active { transform: scale(0.98); }
+    /* Scrollbar halus untuk tabel di mobile */
+    .table-scroll::-webkit-scrollbar { height: 6px; }
+    .table-scroll::-webkit-scrollbar-track { background: #0b1120; }
+    .table-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950">
+<body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
 
   <!-- TOP NAVIGATION & ROLE SWITCHER -->
-  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shadow-lg shadow-amber-500/20">
+  <header class="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/20 shrink-0">
           ⚡
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-bold text-base sm:text-lg tracking-tight text-white">MBP Dispatch & Monitor</h1>
-            <span id="connectionBadge" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-              Mode Demo Lokal
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="font-bold text-sm sm:text-lg tracking-tight text-white leading-tight">MBP Monitor</h1>
+            <span id="connectionBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+              Demo Lokal
             </span>
           </div>
-          <p class="text-xs text-slate-400">Mobile Backup Power Real-Time Tracking System</p>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Mobile Backup Power Real-Time Tracking</p>
         </div>
       </div>
 
-      <!-- Role Switcher Tabs -->
-      <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-        <button id="tabOmc" onclick="switchRole('omc')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
-          🖥️ Dashboard OMC
+      <!-- Action Buttons (Sync & Config) -->
+      <div class="flex items-center gap-1.5 ml-auto sm:order-3">
+        <button onclick="syncFromServer(true)" title="Sinkronisasi Data" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1 transition">
+          <span id="syncIcon">🔄</span> <span class="hidden sm:inline">Sync</span>
         </button>
-        <button id="tabMbp" onclick="switchRole('mbp')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
-          📱 Mobile MBP (Lapangan)
+        <button onclick="toggleConfigModal()" title="Pengaturan API" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+          ⚙️ <span class="hidden sm:inline">API</span>
         </button>
       </div>
 
-      <!-- API Config & Manual Refresh -->
-      <div class="flex items-center gap-2">
-        <button onclick="syncFromServer(true)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
-          <span id="syncIcon">🔄</span> Sync
+      <!-- Role Switcher Tabs (Lebar Penuh di Mobile) -->
+      <div class="w-full sm:w-auto flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 sm:order-2">
+        <button id="tabOmc" onclick="switchRole('omc')" class="flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
+          🖥️ OMC Monitor
         </button>
-        <button onclick="toggleConfigModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
-          ⚙️ API Sheets
+        <button id="tabMbp" onclick="switchRole('mbp')" class="flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+          📱 Lapangan MBP
         </button>
       </div>
+
     </div>
   </header>
 
   <!-- MAIN CONTENT AREA -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6">
 
     <!-- ========================================== -->
     <!-- ROLE 1: DASHBOARD OMC (DISPATCHER & TABLE) -->
     <!-- ========================================== -->
-    <section id="viewOmc" class="space-y-6">
+    <section id="viewOmc" class="space-y-4 sm:space-y-6">
       
-      <!-- Summary KPI & Status Distribution Strip -->
-      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <!-- Total Unit MBP -->
-          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-            <p class="text-xs text-slate-400 uppercase font-medium">Total Unit MBP</p>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span id="kpiTotal" class="text-2xl font-bold font-mono text-white">0</span>
-              <span class="text-xs font-mono text-slate-400">Unit</span>
+      <!-- SUMMARY KPI STRIP & PERCENTAGE CHART (MOBILE OPTIMIZED) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl space-y-4">
+        
+        <!-- 4 Grid Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+          
+          <!-- Card 1: Total Unit -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1.5">
+              <span class="text-[11px] sm:text-xs text-slate-400 uppercase font-semibold tracking-wider truncate">Total Unit</span>
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 shrink-0">100%</span>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">100% Terdaftar</p>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiTotal" class="text-xl sm:text-2xl font-bold font-mono text-white leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Terdata di Sistem</p>
           </div>
 
-          <!-- Siaga (Idle) -->
-          <div class="bg-slate-950/70 border border-emerald-500/20 rounded-xl p-4">
-            <div class="flex items-center justify-between">
-              <p class="text-xs text-emerald-400 uppercase font-medium">Siaga (Idle)</p>
-              <span id="kpiIdlePct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">0%</span>
+          <!-- Card 2: Siaga (Idle) -->
+          <div class="bg-slate-950/80 border border-emerald-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1.5">
+              <span class="text-[11px] sm:text-xs text-emerald-400 uppercase font-semibold tracking-wider truncate">Siaga (Idle)</span>
+              <span id="kpiIdlePct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">0%</span>
             </div>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span id="kpiIdle" class="text-2xl font-bold font-mono text-emerald-400">0</span>
-              <span class="text-xs font-mono text-slate-400">Unit</span>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiIdle" class="text-xl sm:text-2xl font-bold font-mono text-emerald-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Standby & Siap Dispatch</p>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Standby / Ready</p>
           </div>
 
-          <!-- Mobilisasi (Accept / OTW) -->
-          <div class="bg-slate-950/70 border border-amber-500/20 rounded-xl p-4">
-            <div class="flex items-center justify-between">
-              <p class="text-xs text-amber-400 uppercase font-medium">Mobilisasi</p>
-              <span id="kpiMovingPct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">0%</span>
+          <!-- Card 3: Mobilisasi (Accept / OTW) -->
+          <div class="bg-slate-950/80 border border-amber-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1.5">
+              <span class="text-[11px] sm:text-xs text-amber-400 uppercase font-semibold tracking-wider truncate">Mobilisasi</span>
+              <span id="kpiMovingPct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">0%</span>
             </div>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span id="kpiMoving" class="text-2xl font-bold font-mono text-amber-400">0</span>
-              <span class="text-xs font-mono text-slate-400">Unit</span>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiMoving" class="text-xl sm:text-2xl font-bold font-mono text-amber-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Accept / OTW ke Site</p>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Accept / OTW Site</p>
           </div>
 
-          <!-- Aktif Backup (Onsite) -->
-          <div class="bg-slate-950/70 border border-sky-500/20 rounded-xl p-4">
-            <div class="flex items-center justify-between">
-              <p class="text-xs text-sky-400 uppercase font-medium">Onsite Backup</p>
-              <span id="kpiOnsitePct" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">0%</span>
+          <!-- Card 4: Onsite Backup -->
+          <div class="bg-slate-950/80 border border-sky-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1.5">
+              <span class="text-[11px] sm:text-xs text-sky-400 uppercase font-semibold tracking-wider truncate">Onsite</span>
+              <span id="kpiOnsitePct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">0%</span>
             </div>
-            <div class="flex items-baseline gap-2 mt-1">
-              <span id="kpiOnsite" class="text-2xl font-bold font-mono text-sky-400">0</span>
-              <span class="text-xs font-mono text-slate-400">Unit</span>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiOnsite" class="text-xl sm:text-2xl font-bold font-mono text-sky-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">Catu Daya Aktif di Site</p>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 truncate">Catu Daya Aktif</p>
           </div>
+
         </div>
 
-        <!-- Visual Multi-segment Distribution Chart Bar -->
-        <div class="space-y-2 pt-2 border-t border-slate-800/80">
-          <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-            <span class="font-medium text-slate-300">Distribusi Status Unit MBP Real-Time</span>
-            <div class="flex items-center gap-3 text-[11px] font-mono">
-              <span class="flex items-center gap-1 text-emerald-400">
-                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Idle (<span id="distLabelIdle">0%</span>)
+        <!-- Visual Multi-segment Distribution Bar & Legend -->
+        <div class="space-y-2 pt-2 border-t border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+            <span class="font-medium text-slate-300 text-[11px] sm:text-xs">Distribusi Armada Real-Time</span>
+            
+            <!-- Legend Items (Flex Wrap Aman di Mobile) -->
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] font-mono">
+              <span class="inline-flex items-center gap-1 text-emerald-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Idle: <strong id="distLabelIdle">0%</strong>
               </span>
-              <span class="flex items-center gap-1 text-amber-400">
-                <span class="w-2 h-2 rounded-full bg-amber-400"></span> Mobilisasi (<span id="distLabelMoving">0%</span>)
+              <span class="inline-flex items-center gap-1 text-amber-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span> Bergerak: <strong id="distLabelMoving">0%</strong>
               </span>
-              <span class="flex items-center gap-1 text-sky-400">
-                <span class="w-2 h-2 rounded-full bg-sky-400"></span> Onsite (<span id="distLabelOnsite">0%</span>)
+              <span class="inline-flex items-center gap-1 text-sky-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span> Onsite: <strong id="distLabelOnsite">0%</strong>
               </span>
             </div>
           </div>
+
+          <!-- Progress Bar Container -->
           <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800 p-0.5 gap-0.5">
-            <div id="barIdle" class="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style="width: 0%" title="Idle"></div>
-            <div id="barMoving" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%" title="Mobilisasi"></div>
-            <div id="barOnsite" class="h-full bg-sky-500 rounded-r-full transition-all duration-500" style="width: 0%" title="Onsite"></div>
+            <div id="barIdle" class="h-full bg-emerald-500 rounded-l-full transition-all duration-500 min-w-0" style="width: 0%" title="Idle"></div>
+            <div id="barMoving" class="h-full bg-amber-500 transition-all duration-500 min-w-0" style="width: 0%" title="Mobilisasi"></div>
+            <div id="barOnsite" class="h-full bg-sky-500 rounded-r-full transition-all duration-500 min-w-0" style="width: 0%" title="Onsite"></div>
           </div>
         </div>
+
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <!-- Main Layout: Form + Table -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
         
-        <!-- Panel Kiri: WhatsApp Dispatcher Form -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-            <div>
-              <h2 class="text-base font-bold text-white flex items-center gap-2">
-                <span>📡</span> WhatsApp Dispatcher
-              </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Assign tiket site & kirim instruksi instan via WA</p>
-            </div>
+        <!-- Panel Dispatcher WA -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="mb-4 pb-3 border-b border-slate-800">
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <span>📡</span> WhatsApp Dispatcher
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Assign tiket site & kirim notifikasi via WA</p>
           </div>
 
-          <form id="dispatchForm" onsubmit="handleDispatchSubmit(event)" class="space-y-4">
+          <form id="dispatchForm" onsubmit="handleDispatchSubmit(event)" class="space-y-3.5">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1.5">Pilih Tim / Nama MBP</label>
-              <select id="dispatchMbpSelect" onchange="handleMbpDispatchChange()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Pilih Tim MBP</label>
+              <select id="dispatchMbpSelect" onchange="handleMbpDispatchChange()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
               </select>
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1.5">Nomor WhatsApp MBP (Format 628...)</label>
-              <input id="dispatchWaInput" type="text" required placeholder="6281234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+              <label class="block text-xs font-medium text-slate-300 mb-1">Nomor WhatsApp MBP</label>
+              <input id="dispatchWaInput" type="text" required placeholder="6281234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1.5">Site Destinasi</label>
-              <select id="dispatchSiteSelect" onchange="toggleCustomSiteInput()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi</label>
+              <select id="dispatchSiteSelect" onchange="toggleCustomSiteInput()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
                 <option value="SITE-PLM-014 (Ilir Barat)">SITE-PLM-014 (Ilir Barat)</option>
                 <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
                 <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
@@ -187,51 +205,51 @@
                 <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
                 <option value="CUSTOM">+ Ketik Nama Site Manual...</option>
               </select>
-              <input id="dispatchCustomSite" type="text" placeholder="Masukkan Kode / Nama Site..." class="hidden mt-2 w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none" />
+              <input id="dispatchCustomSite" type="text" placeholder="Masukkan Kode / Nama Site..." class="hidden mt-2 w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none" />
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1.5">Prioritas Tiket</label>
-              <select id="dispatchPrioritySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
-                <option value="Critical">🔴 Critical (Genset Utama Down / VIP)</option>
-                <option value="High" selected>🟠 High (Baterai Low Voltage)</option>
-                <option value="Medium">🟡 Medium (PLN Off Berkepanjangan)</option>
-                <option value="Low">🟢 Low (Preventive / Standby)</option>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Prioritas</label>
+              <select id="dispatchPrioritySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="Critical">🔴 Critical (Genset Down / VIP)</option>
+                <option value="High" selected>🟠 High (Low Battery)</option>
+                <option value="Medium">🟡 Medium (PLN Padam)</option>
+                <option value="Low">🟢 Low (Standby / Patrol)</option>
               </select>
             </div>
 
-            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
-              <span>💬</span> Kirim Tiket via WA & Update Sheet
+            <button type="submit" class="w-full py-2.5 sm:py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition active:scale-95">
+              <span>💬</span> Kirim Tiket via WA
             </button>
           </form>
         </div>
 
-        <!-- Panel Kanan: Tabel Monitoring Real-Time -->
+        <!-- Panel Tabel Monitoring -->
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <div class="p-5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div class="p-3.5 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-2">
             <div>
-              <h2 class="text-base font-bold text-white flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Tabel Monitoring Real-Time Teknisi MBP
+              <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                Status Armada Real-Time
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Timer berdetak otomatis berdasarkan selisih waktu sejak perubahan status terakhir</p>
+              <p class="text-[11px] text-slate-400">Durasi terhitung otomatis per perubahan status</p>
             </div>
-            <span id="lastSyncText" class="text-xs font-mono text-slate-400">Update: Baru saja</span>
+            <span id="lastSyncText" class="text-[10px] sm:text-xs font-mono text-slate-400 shrink-0">Update: Baru saja</span>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[620px]">
               <thead>
-                <tr class="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  <th class="py-3.5 px-4">Nama MBP</th>
-                  <th class="py-3.5 px-4">Site Destinasi</th>
-                  <th class="py-3.5 px-4">Prioritas</th>
-                  <th class="py-3.5 px-4">Status Terkini</th>
-                  <th class="py-3.5 px-4">Timer Real-Time</th>
-                  <th class="py-3.5 px-4">Log Durasi Status</th>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-3 px-3.5">Nama MBP</th>
+                  <th class="py-3 px-3.5">Site Destinasi</th>
+                  <th class="py-3 px-3.5">Prioritas</th>
+                  <th class="py-3 px-3.5">Status Terkini</th>
+                  <th class="py-3 px-3.5">Timer Berjalan</th>
+                  <th class="py-3 px-3.5">Log Durasi</th>
                 </tr>
               </thead>
-              <tbody id="omcTableBody" class="divide-y divide-slate-800/70 text-sm">
+              <tbody id="omcTableBody" class="divide-y divide-slate-800/70 text-xs sm:text-sm">
               </tbody>
             </table>
           </div>
@@ -243,100 +261,100 @@
     <!-- ========================================== -->
     <!-- ROLE 2: TAMPILAN MOBILE MBP (FOCUS MODE)   -->
     <!-- ========================================== -->
-    <section id="viewMbp" class="hidden max-w-md mx-auto space-y-5">
+    <section id="viewMbp" class="hidden max-w-md mx-auto space-y-4">
       
       <!-- Pilihan Identitas Teknisi MBP -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
         <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-2">
-          👷 Pilih Identitas Unit MBP Anda
+          👷 Pilih Identitas Unit Anda
         </label>
-        <select id="mobileMbpSelect" onchange="handleMobileMbpSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-amber-500">
+        <select id="mobileMbpSelect" onchange="handleMobileMbpSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-amber-500">
         </select>
       </div>
 
       <!-- Kartu Detail Tugas Aktif -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 relative overflow-hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Order ID Aktif</span>
-            <h3 id="mobileOrderId" class="text-lg font-mono font-bold text-white">ORD-20261104-001</h3>
+            <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Order ID Aktif</span>
+            <h3 id="mobileOrderId" class="text-base sm:text-lg font-mono font-bold text-white">ORD-20261104-001</h3>
           </div>
-          <span id="mobilePriorityBadge" class="px-3 py-1 rounded-full text-xs font-bold">
+          <span id="mobilePriorityBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0">
             Critical
           </span>
         </div>
 
-        <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3.5">
-          <span class="text-[11px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
-          <p id="mobileSiteDest" class="text-base font-bold text-white mt-0.5">SITE-PLM-014 (Ilir Barat)</p>
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+          <span class="text-[10px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
+          <p id="mobileSiteDest" class="text-sm sm:text-base font-bold text-white mt-0.5">SITE-PLM-014 (Ilir Barat)</p>
         </div>
 
         <div class="flex items-center justify-between pt-2 border-t border-slate-800">
           <div>
-            <span class="text-[11px] uppercase tracking-wider text-slate-400 block">Status Saat Ini</span>
-            <div id="mobileCurrentStatusBadge" class="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold">
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Status Saat Ini</span>
+            <div id="mobileCurrentStatusBadge" class="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold">
               Onsite
             </div>
           </div>
           <div class="text-right">
-            <span class="text-[11px] uppercase tracking-wider text-slate-400 block">Durasi Berjalan</span>
-            <p id="mobileLiveTimer" class="text-xl font-mono font-bold text-amber-400 mt-0.5">00h 00m 00s</p>
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Durasi Berjalan</span>
+            <p id="mobileLiveTimer" class="text-lg sm:text-xl font-mono font-bold text-amber-400 mt-0.5">00h 00m 00s</p>
           </div>
         </div>
       </div>
 
-      <!-- 4 Tombol Status Utama Berukuran Besar (1x Klik) -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+      <!-- 4 Tombol Status Utama (1x Klik) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">
-            Update Status Lapangan (1x Klik)
+            Update Status Lapangan
           </h4>
           <span id="mobileSyncFeedback" class="text-xs font-mono text-emerald-400 hidden">✓ Tersimpan</span>
         </div>
 
-        <div class="grid grid-cols-1 gap-3">
-          <button onclick="updateMbpStatus('Idle')" id="btnStatusIdle" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3.5 text-left">
-              <span class="text-2xl">🟢</span>
+        <div class="grid grid-cols-1 gap-2.5">
+          <button onclick="updateMbpStatus('Idle')" id="btnStatusIdle" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3 text-left">
+              <span class="text-xl">🟢</span>
               <div>
-                <p class="font-bold text-base">1. Idle (Siaga)</p>
-                <p class="text-xs opacity-75">Standby di homebase / tugas selesai</p>
+                <p class="font-bold text-sm sm:text-base">1. Idle (Siaga)</p>
+                <p class="text-[11px] opacity-75">Standby di basecamp</p>
               </div>
             </div>
-            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <button onclick="updateMbpStatus('Accept Order')" id="btnStatusAccept" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3.5 text-left">
-              <span class="text-2xl">📋</span>
+          <button onclick="updateMbpStatus('Accept Order')" id="btnStatusAccept" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3 text-left">
+              <span class="text-xl">📋</span>
               <div>
-                <p class="font-bold text-base">2. Accept Order</p>
-                <p class="text-xs opacity-75">Tiket diterima, persiapan genset/MBP</p>
+                <p class="font-bold text-sm sm:text-base">2. Accept Order</p>
+                <p class="text-[11px] opacity-75">Persiapan penugasan genset</p>
               </div>
             </div>
-            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <button onclick="updateMbpStatus('OTW to Site')" id="btnStatusOtw" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3.5 text-left">
-              <span class="text-2xl">🚚</span>
+          <button onclick="updateMbpStatus('OTW to Site')" id="btnStatusOtw" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3 text-left">
+              <span class="text-xl">🚚</span>
               <div>
-                <p class="font-bold text-base">3. OTW to Site</p>
-                <p class="text-xs opacity-75">Sedang dalam perjalanan menuju lokasi site</p>
+                <p class="font-bold text-sm sm:text-base">3. OTW to Site</p>
+                <p class="text-[11px] opacity-75">Dalam perjalanan menuju site</p>
               </div>
             </div>
-            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <button onclick="updateMbpStatus('Onsite')" id="btnStatusOnsite" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3.5 text-left">
-              <span class="text-2xl">⚡</span>
+          <button onclick="updateMbpStatus('Onsite')" id="btnStatusOnsite" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3 text-left">
+              <span class="text-xl">⚡</span>
               <div>
-                <p class="font-bold text-base">4. Onsite</p>
-                <p class="text-xs opacity-75">Tiba di site & proses catu daya MBP aktif</p>
+                <p class="font-bold text-sm sm:text-base">4. Onsite</p>
+                <p class="text-[11px] opacity-75">Tiba di site & catu daya aktif</p>
               </div>
             </div>
-            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
         </div>
       </div>
@@ -346,27 +364,27 @@
 
   <!-- MODAL KONFIGURASI GOOGLE APPS SCRIPT WEB APP URL -->
   <div id="configModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <h3 class="font-bold text-white text-base">⚙️ Konfigurasi Google Apps Script API</h3>
-        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white text-sm">✕</button>
+        <h3 class="font-bold text-white text-sm sm:text-base">⚙️ Konfigurasi Google Apps Script API</h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white text-sm p-1">✕</button>
       </div>
       <div class="space-y-2">
-        <label class="block text-xs font-medium text-slate-300">Google Apps Script Web App URL (`.../exec`)</label>
-        <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+        <label class="block text-xs font-medium text-slate-300">Web App URL (`.../exec`)</label>
+        <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
         <p class="text-[11px] text-slate-400 leading-relaxed">
-          Kosongkan jika ingin mencoba dalam <strong>Mode Demo Lokal</strong> (data tersimpan di browser). Jika diisi dengan URL Web App Google Apps Script Anda, aplikasi akan melakukan sinkronisasi 2 arah secara langsung ke Google Sheets.
+          Tempelkan Web App URL dari deployment Google Apps Script Anda untuk sinkronisasi 2 arah dengan Google Sheets.
         </p>
       </div>
       <div class="flex items-center justify-end gap-2 pt-2">
-        <button onclick="resetDemoData()" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold mr-auto">
-          Reset Data Demo
+        <button onclick="resetDemoData()" class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold mr-auto">
+          Reset Demo
         </button>
-        <button onclick="toggleConfigModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">
+        <button onclick="toggleConfigModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">
           Batal
         </button>
-        <button onclick="saveGasUrl()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
-          Simpan & Hubungkan
+        <button onclick="saveGasUrl()" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
+          Simpan
         </button>
       </div>
     </div>
@@ -383,7 +401,6 @@
     let selectedMobileMbp = '';
     let mbpList = [];
 
-    // Seed Data Awal untuk Mode Demo / Fallback
     function getSeedData() {
       const now = Date.now();
       const minAgo = m => new Date(now - m * 60000).toISOString();
@@ -486,8 +503,8 @@
       };
       const cls = styles[status] || styles['Idle'];
       const dotCls = dot[status] || dot['Idle'];
-      return `<span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ${cls}">
-        <span class="w-2 h-2 rounded-full ${dotCls}"></span>
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${cls} whitespace-nowrap">
+        <span class="w-1.5 h-1.5 rounded-full ${dotCls} shrink-0"></span>
         ${status}
       </span>`;
     }
@@ -535,11 +552,11 @@
     function updateConnectionBadge() {
       const badge = document.getElementById('connectionBadge');
       if (gasWebAppUrl) {
-        badge.textContent = 'Terhubung ke Google Sheets';
-        badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+        badge.textContent = 'Sheets Terhubung';
+        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap';
       } else {
-        badge.textContent = 'Mode Demo Lokal';
-        badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30';
+        badge.textContent = 'Demo Lokal';
+        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap';
       }
     }
 
@@ -595,12 +612,12 @@
       const movingCount = mbpList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
       const onsiteCount = mbpList.filter(m => m.status === 'Onsite').length;
 
-      // Hitung Persentase Relatif
-      const idlePct = total > 0 ? ((idleCount / total) * 100).toFixed(1) : '0.0';
-      const movingPct = total > 0 ? ((movingCount / total) * 100).toFixed(1) : '0.0';
-      const onsitePct = total > 0 ? ((onsiteCount / total) * 100).toFixed(1) : '0.0';
+      // Hitung Persentase Relatif (Bulatkan 1 desimal)
+      const idlePct = total > 0 ? ((idleCount / total) * 100).toFixed(0) : '0';
+      const movingPct = total > 0 ? ((movingCount / total) * 100).toFixed(0) : '0';
+      const onsitePct = total > 0 ? ((onsiteCount / total) * 100).toFixed(0) : '0';
 
-      // Update Angka & Badge Persentase KPI
+      // Update Angka & Badge Persentase
       document.getElementById('kpiTotal').textContent = total;
       
       document.getElementById('kpiIdle').textContent = idleCount;
@@ -612,7 +629,7 @@
       document.getElementById('kpiOnsite').textContent = onsiteCount;
       document.getElementById('kpiOnsitePct').textContent = `${onsitePct}%`;
 
-      // Update Bar Chart Distribusi Visual
+      // Update Lebar Bar Chart Distribusi
       document.getElementById('barIdle').style.width = `${idlePct}%`;
       document.getElementById('barMoving').style.width = `${movingPct}%`;
       document.getElementById('barOnsite').style.width = `${onsitePct}%`;
@@ -630,21 +647,21 @@
 
         return `
           <tr class="hover:bg-slate-800/40 transition">
-            <td class="py-3.5 px-4">
+            <td class="py-3 px-3.5 whitespace-nowrap">
               <div class="font-bold text-white">${item.namaMbp}</div>
-              <div class="text-xs font-mono text-slate-400">WA: +${item.noWa} • <span class="text-slate-300">${item.orderId}</span></div>
+              <div class="text-[11px] font-mono text-slate-400">+${item.noWa} • <span class="text-slate-300">${item.orderId}</span></div>
             </td>
-            <td class="py-3.5 px-4 font-medium text-slate-200">${item.siteDestinasi}</td>
-            <td class="py-3.5 px-4">
-              <span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${prioClass}">${item.prioritas}</span>
+            <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${item.siteDestinasi}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${prioClass}">${item.prioritas}</span>
             </td>
-            <td class="py-3.5 px-4">${getStatusBadgeHtml(item.status)}</td>
-            <td class="py-3.5 px-4">
-              <span data-timer-idx="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg text-xs">
+            <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(item.status)}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <span data-timer-idx="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
                 ${timerStr}
               </span>
             </td>
-            <td class="py-3.5 px-4 text-xs font-mono text-slate-400">${item.totalDurasi || '-'}</td>
+            <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${item.totalDurasi || '-'}</td>
           </tr>
         `;
       }).join('');
@@ -659,7 +676,7 @@
 
       const prioBadge = document.getElementById('mobilePriorityBadge');
       prioBadge.textContent = item.prioritas || 'Low';
-      prioBadge.className = `px-3 py-1 rounded-full text-xs font-bold ${getPriorityBadgeClass(item.prioritas)}`;
+      prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(item.prioritas)}`;
 
       document.getElementById('mobileCurrentStatusBadge').outerHTML =
         `<div id="mobileCurrentStatusBadge" class="mt-1">${getStatusBadgeHtml(item.status)}</div>`;
@@ -677,9 +694,9 @@
       statusMap.forEach(st => {
         const btn = document.getElementById(st.id);
         if (item.status === st.name) {
-          btn.className = `status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all ${st.activeCls}`;
+          btn.className = `status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all ${st.activeCls}`;
         } else {
-          btn.className = 'status-btn w-full py-4 px-5 rounded-xl border-2 border-slate-800 bg-slate-950/70 hover:border-slate-700 text-slate-300 flex items-center justify-between transition-all';
+          btn.className = 'status-btn w-full py-3.5 px-4 rounded-xl border-2 border-slate-800 bg-slate-950/70 hover:border-slate-700 text-slate-300 flex items-center justify-between transition-all';
         }
       });
     }
@@ -852,13 +869,13 @@
       if (role === 'omc') {
         viewOmc.classList.remove('hidden');
         viewMbp.classList.add('hidden');
-        tabOmc.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
-        tabMbp.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+        tabOmc.className = 'flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
+        tabMbp.className = 'flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
       } else {
         viewOmc.classList.add('hidden');
         viewMbp.classList.remove('hidden');
-        tabMbp.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
-        tabOmc.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+        tabMbp.className = 'flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
+        tabOmc.className = 'flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
       }
       renderAll();
     }
