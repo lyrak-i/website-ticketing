@@ -29,11 +29,9 @@
 </head>
 <body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
 
-  <!-- TOP NAVIGATION & ROLE SWITCHER -->
+  <!-- TOP NAVIGATION -->
   <header class="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
     <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
-      
-      <!-- Brand & Status -->
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/20 shrink-0">
           ⚡
@@ -49,7 +47,6 @@
         </div>
       </div>
 
-      <!-- Action Buttons -->
       <div class="flex items-center gap-1.5 ml-auto sm:order-3">
         <button onclick="syncFromServer(true)" title="Sinkronisasi Data" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1 transition">
           <span id="syncIcon">🔄</span> <span class="hidden sm:inline">Sync</span>
@@ -59,7 +56,6 @@
         </button>
       </div>
 
-      <!-- Role Switcher Tabs -->
       <div class="w-full sm:w-auto flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 sm:order-2">
         <button id="tabOmc" onclick="switchRole('omc')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
           🖥️ OMC Monitor
@@ -68,22 +64,18 @@
           📱 Lapangan MBP
         </button>
       </div>
-
     </div>
   </header>
 
-  <!-- MAIN CONTENT AREA -->
+  <!-- MAIN CONTENT -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6">
 
-    <!-- ========================================== -->
-    <!-- ROLE 1: DASHBOARD OMC (DISPATCHER & TABLES) -->
-    <!-- ========================================== -->
+    <!-- ROLE 1: DASHBOARD OMC -->
     <section id="viewOmc" class="space-y-4 sm:space-y-6">
       
-      <!-- KPI & STATUS PERCENTAGE STRIP -->
+      <!-- KPI Cards -->
       <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl space-y-4">
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
-          
           <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
             <div class="flex items-center justify-between gap-1 mb-1">
               <span class="text-[11px] sm:text-xs text-slate-400 uppercase font-semibold tracking-wider">Total Armada</span>
@@ -131,10 +123,8 @@
             </div>
             <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1">Catu Daya Aktif</p>
           </div>
-
         </div>
 
-        <!-- Progress Bar & Legend -->
         <div class="space-y-2 pt-2 border-t border-slate-800">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
             <span class="font-medium text-slate-300 text-[11px] sm:text-xs">Distribusi Armada Real-Time</span>
@@ -158,10 +148,8 @@
         </div>
       </div>
 
-      <!-- DISPATCH FORM & LIVE FLEET -->
+      <!-- Form Dispatch & Tabel Armada -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
-        
-        <!-- Form Dispatcher WA -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div class="mb-4 pb-3 border-b border-slate-800">
             <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
@@ -171,7 +159,6 @@
           </div>
 
           <form id="dispatchForm" onsubmit="handleDispatchSubmit(event)" class="space-y-3.5">
-            <!-- Order ID Preview -->
             <div>
               <label class="block text-xs font-medium text-slate-300 mb-1">Order ID Baru (Otomatis)</label>
               <div class="flex items-center gap-2">
@@ -194,17 +181,14 @@
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi</label>
-              <select id="dispatchSiteSelect" onchange="toggleCustomSiteInput()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
-                <option value="SITE-PLM-014 (Ilir Barat)">SITE-PLM-014 (Ilir Barat)</option>
-                <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
-                <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
-                <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
-                <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
-                <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
-                <option value="CUSTOM">+ Ketik Nama Site Manual...</option>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi (Tersedia Link Maps)</label>
+              <select id="dispatchSiteSelect" onchange="handleSiteSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
               </select>
-              <input id="dispatchCustomSite" type="text" placeholder="Masukkan Kode / Nama Site..." class="hidden mt-2 w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none" />
+              <div class="mt-1 flex items-center justify-between text-[11px]">
+                <a id="dispatchSiteMapsLink" href="#" target="_blank" rel="noopener" class="text-sky-400 hover:underline flex items-center gap-1 font-mono">
+                  📍 Buka Titik Google Maps Site
+                </a>
+              </div>
             </div>
 
             <div>
@@ -217,7 +201,6 @@
               </select>
             </div>
 
-            <!-- WhatsApp Message Preview -->
             <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
               <span class="text-slate-500 uppercase font-semibold text-[10px] block">Preview Pesan WA:</span>
               <p id="waPreviewText" class="font-mono text-emerald-400 break-words">[Order ID: ORD-...] Ada masalah di site ...</p>
@@ -229,7 +212,7 @@
           </form>
         </div>
 
-        <!-- Tabel Status Armada Terkini -->
+        <!-- Tabel Armada Terkini -->
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
           <div class="p-3.5 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-2">
             <div>
@@ -237,17 +220,17 @@
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                 Status Terkini Teknisi MBP
               </h2>
-              <p class="text-[11px] text-slate-400">Kondisi real-time masing-masing tim & timer durasi berjalan</p>
+              <p class="text-[11px] text-slate-400">Monitoring posisi dan durasi aktual</p>
             </div>
             <span id="lastSyncText" class="text-[10px] sm:text-xs font-mono text-slate-400 shrink-0">Update: Baru saja</span>
           </div>
 
           <div class="overflow-x-auto table-scroll">
-            <table class="w-full text-left border-collapse min-w-[580px]">
+            <table class="w-full text-left border-collapse min-w-[620px]">
               <thead>
                 <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   <th class="py-3 px-3.5">Nama MBP</th>
-                  <th class="py-3 px-3.5">Order ID Aktif</th>
+                  <th class="py-3 px-3.5">Order ID</th>
                   <th class="py-3 px-3.5">Site Destinasi</th>
                   <th class="py-3 px-3.5">Status Terkini</th>
                   <th class="py-3 px-3.5">Timer Berjalan</th>
@@ -258,17 +241,16 @@
             </table>
           </div>
         </div>
-
       </div>
 
-      <!-- TABEL RIWAYAT LOG SEMUA ORDER ID -->
+      <!-- TABEL LOG SEMUA ORDER ID -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div class="p-3.5 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-2">
           <div>
             <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
               <span>📋</span> Log Tiket Order ID (Google Sheets)
             </h2>
-            <p class="text-[11px] text-slate-400">Setiap order id unik tersimpan pada baris baru lengkap dengan rekaman durasi idle sebelumnya</p>
+            <p class="text-[11px] text-slate-400">Mencatat Link Maps, Estimasi ETA (20 km/jam), dan Selisih Waktu OTW vs ETA</p>
           </div>
           <span class="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
             Total Tiket: <strong id="totalOrdersCount">0</strong>
@@ -276,15 +258,17 @@
         </div>
 
         <div class="overflow-x-auto table-scroll">
-          <table class="w-full text-left border-collapse min-w-[760px]">
+          <table class="w-full text-left border-collapse min-w-[980px]">
             <thead>
               <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <th class="py-3 px-3.5">Order ID</th>
                 <th class="py-3 px-3.5">Nama MBP</th>
-                <th class="py-3 px-3.5">Site Destinasi</th>
+                <th class="py-3 px-3.5">Site & Maps</th>
                 <th class="py-3 px-3.5">Prioritas</th>
-                <th class="py-3 px-3.5">Durasi Idle Sebelum Order</th>
-                <th class="py-3 px-3.5">Status Tiket</th>
+                <th class="py-3 px-3.5">Idle Sblm Order</th>
+                <th class="py-3 px-3.5">Estimasi ETA</th>
+                <th class="py-3 px-3.5">Selisih OTW vs ETA</th>
+                <th class="py-3 px-3.5">Status</th>
                 <th class="py-3 px-3.5">Log Total Durasi</th>
               </tr>
             </thead>
@@ -296,12 +280,9 @@
 
     </section>
 
-    <!-- ========================================== -->
-    <!-- ROLE 2: TAMPILAN MOBILE MBP (FOCUS MODE)   -->
-    <!-- ========================================== -->
+    <!-- ROLE 2: MOBILE MBP -->
     <section id="viewMbp" class="hidden max-w-md mx-auto space-y-4">
       
-      <!-- Pilihan Identitas Teknisi MBP -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
         <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-2">
           👷 Pilih Identitas Unit Anda
@@ -310,12 +291,10 @@
         </select>
       </div>
 
-      <!-- Kartu Detail Tugas Aktif -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5 relative overflow-hidden">
         
-        <!-- Notifikasi Tiket Baru Masuk -->
         <div id="incomingOrderBanner" class="hidden p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs animate-pulse">
-          ⚡ <strong>Tiket Baru Diterima dari OMC!</strong> Tekan tombol <strong>Accept Order</strong> di bawah untuk membuat baris tiket & mulai bertugas.
+          ⚡ <strong>Tiket Baru Diterima dari OMC!</strong> Tekan tombol <strong>Accept Order</strong> di bawah untuk menerima penugasan.
         </div>
 
         <div class="flex items-start justify-between gap-2">
@@ -328,37 +307,50 @@
           </span>
         </div>
 
-        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
-          <span class="text-[10px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
-          <p id="mobileSiteDest" class="text-sm sm:text-base font-bold text-white mt-0.5">-</p>
+        <!-- Site & Direct Maps Button -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="text-[10px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
+              <p id="mobileSiteDest" class="text-sm sm:text-base font-bold text-white mt-0.5">-</p>
+            </div>
+          </div>
+          <a id="mobileMapsBtn" href="#" target="_blank" rel="noopener" class="w-full py-2 px-3 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            🗺️ Buka Rute Google Maps ke Site
+          </a>
         </div>
 
-        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <!-- ETA & Selisih Grid -->
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+            <span class="text-[10px] uppercase text-slate-500 block">Estimasi ETA (20 km/j)</span>
+            <p id="mobileEtaVal" class="text-amber-400 font-bold mt-0.5">-</p>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+            <span class="text-[10px] uppercase text-slate-500 block">Selisih OTW vs ETA</span>
+            <p id="mobileDiffVal" class="font-bold mt-0.5 text-slate-400">-</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
           <div>
-            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Durasi Idle Sebelum Order</span>
-            <p id="mobileIdlePrevDuration" class="text-xs font-mono text-slate-300 font-semibold mt-0.5">-</p>
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Status Lapangan</span>
+            <div id="mobileCurrentStatusBadge" class="mt-1"></div>
           </div>
           <div class="text-right">
             <span id="timerTitle" class="text-[10px] uppercase tracking-wider text-slate-400 block">Timer Berjalan</span>
             <p id="mobileLiveTimer" class="text-lg sm:text-xl font-mono font-bold text-amber-400 mt-0.5">00h 00m 00s</p>
           </div>
         </div>
-
-        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-          <span class="text-[10px] uppercase tracking-wider text-slate-400">Status Teknisi</span>
-          <div id="mobileCurrentStatusBadge">
-            <!-- Badge status aktif -->
-          </div>
-        </div>
       </div>
 
-      <!-- 4 Tombol Status Utama (1x Klik) -->
+      <!-- 4 Tombol Status Utama -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">
             Update Status Lapangan (1x Klik)
           </h4>
-          <span id="mobileSyncFeedback" class="text-xs font-mono text-emerald-400 hidden">✓ Baris Tersimpan</span>
+          <span id="mobileSyncFeedback" class="text-xs font-mono text-emerald-400 hidden">✓ Tersimpan</span>
         </div>
 
         <div class="grid grid-cols-1 gap-2.5">
@@ -368,7 +360,7 @@
               <span class="text-xl">📋</span>
               <div>
                 <p class="font-bold text-sm sm:text-base">1. Accept Order</p>
-                <p class="text-[11px] opacity-75">Buat baris baru di Sheets & rekam durasi idle</p>
+                <p class="text-[11px] opacity-75">Buat baris baru di Sheets & catat durasi idle</p>
               </div>
             </div>
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
@@ -380,7 +372,7 @@
               <span class="text-xl">🚚</span>
               <div>
                 <p class="font-bold text-sm sm:text-base">2. OTW to Site</p>
-                <p class="text-[11px] opacity-75">Dalam perjalanan menuju lokasi site</p>
+                <p class="text-[11px] opacity-75">Cek GPS posisi MBP & hitung ETA (20 km/jam)</p>
               </div>
             </div>
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
@@ -392,19 +384,19 @@
               <span class="text-xl">⚡</span>
               <div>
                 <p class="font-bold text-sm sm:text-base">3. Onsite</p>
-                <p class="text-[11px] opacity-75">Tiba di site & proses suplai daya MBP aktif</p>
+                <p class="text-[11px] opacity-75">Tiba di site & catat selisih aktual OTW vs ETA</p>
               </div>
             </div>
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <!-- 4. Idle (Selesai Tiket & Standby) -->
+          <!-- 4. Idle -->
           <button onclick="handleMbpStatusClick('Idle')" id="btnStatusIdle" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">🟢</span>
               <div>
                 <p class="font-bold text-sm sm:text-base">4. Idle (Tugas Selesai / Siaga)</p>
-                <p class="text-[11px] opacity-75">Tutup tiket & mulai catat waktu idle tanpa order</p>
+                <p class="text-[11px] opacity-75">Tutup tiket & mulai catat waktu standby baru</p>
               </div>
             </div>
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
@@ -415,7 +407,7 @@
     </section>
   </main>
 
-  <!-- MODAL KONFIGURASI GOOGLE APPS SCRIPT WEB APP URL -->
+  <!-- MODAL KONFIGURASI API -->
   <div id="configModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -446,38 +438,48 @@
   <!-- APPLICATION LOGIC -->
   <script>
     const DEFAULT_GAS_URL = '';
-    const STORAGE_KEY_FLEET = 'mbp_fleet_state_v2';
-    const STORAGE_KEY_ORDERS = 'mbp_orders_log_v2';
+    const STORAGE_KEY_FLEET = 'mbp_fleet_state_v3';
+    const STORAGE_KEY_ORDERS = 'mbp_orders_log_v3';
     const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
 
     let gasWebAppUrl = localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
     let activeRole = 'omc';
     let selectedMobileMbp = '';
 
-    // Data 4 Armada Utama
-    let fleetList = [];
-    // Data Riwayat Semua Order ID Unik (Baris Sheets)
-    let orderList = [];
+    // Database Site & Koordinat Real Titik Tower
+    const SITE_LOCATIONS = [
+      { name: 'SITE-PLM-014 (Ilir Barat)', lat: -2.9909, lng: 104.7565 },
+      { name: 'SITE-PLM-089 (Seberang Ulu)', lat: -3.0034, lng: 104.7721 },
+      { name: 'SITE-PLM-102 (Sukarami)', lat: -2.9189, lng: 104.7088 },
+      { name: 'SITE-BTA-012 (Baturaja)', lat: -4.1294, lng: 104.1751 },
+      { name: 'SITE-PBM-033 (Prabumulih)', lat: -3.4312, lng: 104.2341 },
+      { name: 'SITE-LLG-021 (Lubuklinggau)', lat: -3.2964, lng: 102.8617 }
+    ];
 
-    function generateNewOrderId() {
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      const orderId = `ORD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const input = document.getElementById('dispatchOrderId');
-      if (input) input.value = orderId;
-      updateWaPreview();
-      return orderId;
+    function getSiteMapsUrl(siteName) {
+      const site = SITE_LOCATIONS.find(s => s.name === siteName);
+      if (site) {
+        return `https://www.google.com/maps/dir/?api=1&destination=${site.lat},${site.lng}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteName)}`;
     }
 
-    function getSeedFleet() {
-      const now = Date.now();
-      const minAgo = m => new Date(now - m * 60000).toISOString();
-      return [
-        { namaMbp: 'MBP-01 (Tim Alpha)', noWa: '6281234567801', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(45), tsCurrentStatusStart: minAgo(45), pendingOrder: null },
-        { namaMbp: 'MBP-02 (Tim Bravo)', noWa: '6281234567802', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(120), tsCurrentStatusStart: minAgo(120), pendingOrder: null },
-        { namaMbp: 'MBP-03 (Tim Charlie)', noWa: '6281234567803', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(30), tsCurrentStatusStart: minAgo(30), pendingOrder: null },
-        { namaMbp: 'MBP-04 (Tim Delta)', noWa: '6285175393095', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(15), tsCurrentStatusStart: minAgo(15), pendingOrder: null }
-      ];
+    // Perhitungan Jarak Haversine (km) & ETA Mobil 20 km/jam
+    function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371.0;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function calculateCarEtaSeconds(distanceKm) {
+      const SPEED_KMH = 20.0; // Sesuai permintaan: laju mobil 20 km/jam
+      const hours = distanceKm / SPEED_KMH;
+      return Math.round(hours * 3600);
     }
 
     function formatDurationMs(ms) {
@@ -494,6 +496,30 @@
       if (!startIso) return '00h 00m 00s';
       const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
       return formatDurationMs(diffMs);
+    }
+
+    function getSeedFleet() {
+      const now = Date.now();
+      const minAgo = m => new Date(now - m * 60000).toISOString();
+      return [
+        { namaMbp: 'MBP-01 (Tim Alpha)', noWa: '6281234567801', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(45), tsCurrentStatusStart: minAgo(45), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
+        { namaMbp: 'MBP-02 (Tim Bravo)', noWa: '6281234567802', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(120), tsCurrentStatusStart: minAgo(120), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
+        { namaMbp: 'MBP-03 (Tim Charlie)', noWa: '6281234567803', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(30), tsCurrentStatusStart: minAgo(30), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
+        { namaMbp: 'MBP-04 (Tim Delta)', noWa: '6285175393095', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(15), tsCurrentStatusStart: minAgo(15), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' }
+      ];
+    }
+
+    let fleetList = [];
+    let orderList = [];
+
+    function generateNewOrderId() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const orderId = `ORD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const input = document.getElementById('dispatchOrderId');
+      if (input) input.value = orderId;
+      updateWaPreview();
+      return orderId;
     }
 
     function getStatusBadgeHtml(status) {
@@ -540,6 +566,7 @@
 
       selectedMobileMbp = fleetList[0]?.namaMbp || '';
 
+      populateSiteOptions();
       populateSelectDropdowns();
       generateNewOrderId();
       renderAll();
@@ -554,26 +581,18 @@
       }, 10000);
     }
 
-    window.addEventListener('storage', (e) => {
-      if (e.key === STORAGE_KEY_FLEET && e.newValue) {
-        fleetList = JSON.parse(e.newValue);
-        renderAll();
-      }
-      if (e.key === STORAGE_KEY_ORDERS && e.newValue) {
-        orderList = JSON.parse(e.newValue);
-        renderAll();
-      }
-    });
+    function populateSiteOptions() {
+      const sel = document.getElementById('dispatchSiteSelect');
+      sel.innerHTML = SITE_LOCATIONS.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+      handleSiteSelectChange();
+    }
 
-    function updateConnectionBadge() {
-      const badge = document.getElementById('connectionBadge');
-      if (gasWebAppUrl) {
-        badge.textContent = 'Sheets Terhubung';
-        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap';
-      } else {
-        badge.textContent = 'Demo Lokal';
-        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap';
-      }
+    function handleSiteSelectChange() {
+      const siteName = document.getElementById('dispatchSiteSelect').value;
+      const mapsUrl = getSiteMapsUrl(siteName);
+      const linkEl = document.getElementById('dispatchSiteMapsLink');
+      if (linkEl) linkEl.href = mapsUrl;
+      updateWaPreview();
     }
 
     function populateSelectDropdowns() {
@@ -606,46 +625,31 @@
       updateWaPreview();
     }
 
-    function toggleCustomSiteInput() {
-      const sel = document.getElementById('dispatchSiteSelect').value;
-      const customInput = document.getElementById('dispatchCustomSite');
-      if (sel === 'CUSTOM') {
-        customInput.classList.remove('hidden');
-        customInput.required = true;
-      } else {
-        customInput.classList.add('hidden');
-        customInput.required = false;
-      }
-      updateWaPreview();
-    }
-
     function updateWaPreview() {
       const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
-      const sel = document.getElementById('dispatchSiteSelect')?.value || '';
-      const site = sel === 'CUSTOM' ? (document.getElementById('dispatchCustomSite')?.value || '...') : sel;
+      const site = document.getElementById('dispatchSiteSelect')?.value || '...';
       const preview = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
       const el = document.getElementById('waPreviewText');
       if (el) el.textContent = preview;
     }
 
-    // Role 1 Action: Dispatch Tiket & Kirim WA
     async function handleDispatchSubmit(event) {
       event.preventDefault();
       const orderId = document.getElementById('dispatchOrderId').value;
       const namaMbp = document.getElementById('dispatchMbpSelect').value;
       const rawWa = document.getElementById('dispatchWaInput').value.replace(/\D/g, '');
-      const siteSel = document.getElementById('dispatchSiteSelect').value;
-      const siteDest = siteSel === 'CUSTOM' ? document.getElementById('dispatchCustomSite').value.trim() : siteSel;
+      const siteDest = document.getElementById('dispatchSiteSelect').value;
       const prioritas = document.getElementById('dispatchPrioritySelect').value;
+      const linkMapsSite = getSiteMapsUrl(siteDest);
 
       if (!orderId || !siteDest || !rawWa) return;
 
-      // Assign tiket sebagai tugas tertunda (pending) ke unit teknisi
       const unit = fleetList.find(m => m.namaMbp === namaMbp);
       if (unit) {
         unit.pendingOrder = {
           orderId,
           siteDestinasi: siteDest,
+          linkMapsSite,
           prioritas,
           dispatchedAt: new Date().toISOString()
         };
@@ -653,51 +657,49 @@
         saveAndBroadcast();
       }
 
-      // Format WhatsApp Message Sesuai Ketentuan: [Order ID: ORD-xxxx] Ada masalah di site [Site Destinasi]
       const waText = `[Order ID: ${orderId}] Ada masalah di site ${siteDest}`;
       const waUrl = `https://wa.me/${rawWa}?text=${encodeURIComponent(waText)}`;
       window.open(waUrl, '_blank', 'noopener,noreferrer');
 
-      // Buat Order ID baru untuk form berikutnya
       generateNewOrderId();
       renderAll();
     }
 
-    // Role 2 Action: 1x Klik Status di Sisi Lapangan
+    // Role 2: Mobile MBP Action
     async function handleMbpStatusClick(newStatus) {
       const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp);
       if (!unit) return;
 
       const nowIso = new Date().toISOString();
       const nowMs = Date.now();
-      const prevStatus = unit.status;
 
       if (newStatus === 'Accept Order') {
-        // Ambil tiket yang di-assign (atau buatkan jika belum ada penugasan dari OMC)
         let orderToAccept = unit.pendingOrder;
         if (!orderToAccept) {
           const autoId = `ORD-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${String(new Date().getHours()).padStart(2,'0')}${String(new Date().getMinutes()).padStart(2,'0')}`;
           orderToAccept = {
             orderId: autoId,
-            siteDestinasi: 'SITE-PLM-014 (Ilir Barat)',
+            siteDestinasi: SITE_LOCATIONS[0].name,
+            linkMapsSite: getSiteMapsUrl(SITE_LOCATIONS[0].name),
             prioritas: 'High'
           };
         }
 
-        // 1. Hitung durasi idle tanpa order ID
         const idleStartMs = unit.tsIdleStart ? new Date(unit.tsIdleStart).getTime() : nowMs;
-        const idleDurationMs = Math.max(0, nowMs - idleStartMs);
-        const durasiIdleStr = formatDurationMs(idleDurationMs);
+        const durasiIdleStr = formatDurationMs(Math.max(0, nowMs - idleStartMs));
 
-        // 2. Buat BARIS BARU untuk Order ID ini
         const newOrderRecord = {
           orderId: orderToAccept.orderId,
           namaMbp: unit.namaMbp,
           noWa: unit.noWa,
           siteDestinasi: orderToAccept.siteDestinasi,
+          linkMapsSite: orderToAccept.linkMapsSite || getSiteMapsUrl(orderToAccept.siteDestinasi),
           prioritas: orderToAccept.prioritas,
           status: 'Accept Order',
           durasiIdleSebelumOrder: durasiIdleStr,
+          estimasiEta: '-',
+          selisihOtwEta: '-',
+          etaSeconds: 0,
           tsIdle: unit.tsIdleStart,
           tsAccept: nowIso,
           tsOtw: '',
@@ -706,21 +708,21 @@
           totalDurasi: `Idle Sebelum Order: ${durasiIdleStr}`
         };
 
-        orderList.unshift(newOrderRecord); // Tambahkan di baris teratas
+        orderList.unshift(newOrderRecord);
 
-        // Update status armada unit
         unit.status = 'Accept Order';
         unit.activeOrderId = orderToAccept.orderId;
         unit.activeSite = orderToAccept.siteDestinasi;
+        unit.activeMapsLink = orderToAccept.linkMapsSite;
         unit.activePriority = orderToAccept.prioritas;
-        unit.activeIdleDuration = durasiIdleStr;
+        unit.estimasiEta = '-';
+        unit.selisihOtwEta = '-';
         unit.tsCurrentStatusStart = nowIso;
         unit.pendingOrder = null;
 
         saveAndBroadcast();
         showFeedback();
 
-        // Kirim ke Google Apps Script untuk appendRow
         if (gasWebAppUrl) {
           await postToGas({
             action: 'updateStatus',
@@ -728,6 +730,7 @@
             orderId: orderToAccept.orderId,
             noWa: unit.noWa,
             siteDestinasi: orderToAccept.siteDestinasi,
+            linkMapsSite: unit.activeMapsLink,
             prioritas: orderToAccept.prioritas,
             newStatus: 'Accept Order',
             lastIdleTimestamp: unit.tsIdleStart,
@@ -735,23 +738,50 @@
           });
         }
 
-      } else if (newStatus === 'OTW to Site' || newStatus === 'Onsite') {
-        const order = orderList.find(o => o.orderId === unit.activeOrderId);
-        if (order) {
-          order.status = newStatus;
-          if (newStatus === 'OTW to Site') {
-            order.tsOtw = nowIso;
-            const acceptDur = formatDurationMs(nowMs - new Date(order.tsAccept).getTime());
-            order.totalDurasi += ` | Accept: ${acceptDur}`;
-          } else if (newStatus === 'Onsite') {
-            order.tsOnsite = nowIso;
-            const otwDur = formatDurationMs(nowMs - new Date(order.tsOtw).getTime());
-            order.totalDurasi += ` | OTW: ${otwDur}`;
-          }
+      } else if (newStatus === 'OTW to Site') {
+        // Ambil lokasi GPS aktual MBP saat tombol OTW ditekan
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => processOtwWithCoords(pos.coords.latitude, pos.coords.longitude, unit, nowIso, nowMs),
+            () => {
+              // Fallback koordinat kota jika izin GPS ditolak/tidak tersedia
+              processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs);
+            },
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        } else {
+          processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs);
         }
 
-        unit.status = newStatus;
+      } else if (newStatus === 'Onsite') {
+        const order = orderList.find(o => o.orderId === unit.activeOrderId);
+        let selisihStr = '-';
+
+        if (order && order.tsOtw) {
+          const otwMs = nowMs - new Date(order.tsOtw).getTime();
+          const actualOtwSec = Math.floor(otwMs / 1000);
+          const etaSec = order.etaSeconds || 0;
+
+          if (etaSec > 0) {
+            const diffSec = actualOtwSec - etaSec;
+            const absDuration = formatDurationMs(Math.abs(diffSec) * 1000);
+            if (diffSec > 0) {
+              selisihStr = `+${absDuration} (Terlambat)`;
+            } else {
+              selisihStr = `-${absDuration} (Lebih Cepat)`;
+            }
+          }
+
+          order.status = 'Onsite';
+          order.tsOnsite = nowIso;
+          order.selisihOtwEta = selisihStr;
+          order.totalDurasi += ` | OTW: ${formatDurationMs(otwMs)}`;
+        }
+
+        unit.status = 'Onsite';
+        unit.selisihOtwEta = selisihStr;
         unit.tsCurrentStatusStart = nowIso;
+
         saveAndBroadcast();
         showFeedback();
 
@@ -760,13 +790,13 @@
             action: 'updateStatus',
             namaMbp: unit.namaMbp,
             orderId: unit.activeOrderId,
-            newStatus: newStatus,
+            newStatus: 'Onsite',
+            selisihOtwEta: selisihStr,
             timestamp: nowIso
           });
         }
 
       } else if (newStatus === 'Idle') {
-        // Selesaikan tiket yang aktif
         const finishedOrderId = unit.activeOrderId;
         if (finishedOrderId && finishedOrderId !== '-') {
           const order = orderList.find(o => o.orderId === finishedOrderId);
@@ -774,19 +804,20 @@
             order.status = 'Selesai';
             order.tsSelesai = nowIso;
             if (order.tsOnsite) {
-              const onsiteDur = formatDurationMs(nowMs - new Date(order.tsOnsite).getTime());
-              order.totalDurasi += ` | Onsite: ${onsiteDur}`;
+              const onsiteMs = nowMs - new Date(order.tsOnsite).getTime();
+              order.totalDurasi += ` | Onsite: ${formatDurationMs(onsiteMs)}`;
             }
           }
         }
 
-        // Unit kembali ke Idle tanpa order ID
         unit.status = 'Idle';
         unit.activeOrderId = '-';
         unit.activeSite = '-';
+        unit.activeMapsLink = '#';
         unit.activePriority = 'Low';
-        unit.activeIdleDuration = '-';
-        unit.tsIdleStart = nowIso; // Timestamp mulai idle baru
+        unit.estimasiEta = '-';
+        unit.selisihOtwEta = '-';
+        unit.tsIdleStart = nowIso;
         unit.tsCurrentStatusStart = nowIso;
         unit.pendingOrder = null;
 
@@ -802,6 +833,44 @@
             timestamp: nowIso
           });
         }
+      }
+    }
+
+    // Hitung ETA dari koordinat GPS aktual
+    async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
+      const siteObj = SITE_LOCATIONS.find(s => s.name === unit.activeSite) || SITE_LOCATIONS[0];
+      const distKm = calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng);
+      const etaSec = calculateCarEtaSeconds(distKm);
+      const etaStr = `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)`;
+
+      const order = orderList.find(o => o.orderId === unit.activeOrderId);
+      if (order) {
+        order.status = 'OTW to Site';
+        order.tsOtw = nowIso;
+        order.estimasiEta = etaStr;
+        order.etaSeconds = etaSec;
+        if (order.tsAccept) {
+          const acceptMs = nowMs - new Date(order.tsAccept).getTime();
+          order.totalDurasi += ` | Accept: ${formatDurationMs(acceptMs)}`;
+        }
+      }
+
+      unit.status = 'OTW to Site';
+      unit.estimasiEta = etaStr;
+      unit.tsCurrentStatusStart = nowIso;
+
+      saveAndBroadcast();
+      showFeedback();
+
+      if (gasWebAppUrl) {
+        await postToGas({
+          action: 'updateStatus',
+          namaMbp: unit.namaMbp,
+          orderId: unit.activeOrderId,
+          newStatus: 'OTW to Site',
+          estimasiEta: etaStr,
+          timestamp: nowIso
+        });
       }
     }
 
@@ -827,7 +896,6 @@
     }
 
     function renderOmcView() {
-      // 1. KPI Cards
       const total = fleetList.length;
       const idleCount = fleetList.filter(m => m.status === 'Idle').length;
       const movingCount = fleetList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
@@ -853,7 +921,7 @@
       document.getElementById('distLabelMoving').textContent = `${movingPct}%`;
       document.getElementById('distLabelOnsite').textContent = `${onsitePct}%`;
 
-      // 2. Tabel Armada Live
+      // Tabel Status Armada
       const fleetTbody = document.getElementById('fleetTableBody');
       fleetTbody.innerHTML = fleetList.map((unit, idx) => {
         const timerStr = formatElapsed(unit.tsCurrentStatusStart);
@@ -864,7 +932,9 @@
               <div class="text-[11px] font-mono text-slate-400">+${unit.noWa}</div>
             </td>
             <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${unit.activeOrderId}</td>
-            <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${unit.activeSite}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <span class="font-medium text-slate-200">${unit.activeSite}</span>
+            </td>
             <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span data-fleet-timer="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
@@ -875,14 +945,14 @@
         `;
       }).join('');
 
-      // 3. Tabel Riwayat Order ID (Baris Baru)
+      // Tabel Log Order ID
       document.getElementById('totalOrdersCount').textContent = orderList.length;
       const orderTbody = document.getElementById('orderLogTableBody');
       if (orderList.length === 0) {
         orderTbody.innerHTML = `
           <tr>
-            <td colspan="7" class="py-6 text-center text-slate-500 text-xs font-mono">
-              Belum ada riwayat tiket. Kirim tiket dari OMC dan klik 'Accept Order' di sisi mobile untuk membuat baris pertama.
+            <td colspan="9" class="py-6 text-center text-slate-500 text-xs font-mono">
+              Belum ada riwayat tiket.
             </td>
           </tr>
         `;
@@ -891,11 +961,18 @@
           <tr class="hover:bg-slate-800/40 transition">
             <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${item.orderId}</td>
             <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${item.namaMbp}</td>
-            <td class="py-3 px-3.5 text-slate-200 whitespace-nowrap">${item.siteDestinasi}</td>
+            <td class="py-3 px-3.5 whitespace-nowrap">
+              <div class="text-slate-200">${item.siteDestinasi}</div>
+              <a href="${item.linkMapsSite || getSiteMapsUrl(item.siteDestinasi)}" target="_blank" rel="noopener" class="text-[11px] font-mono text-sky-400 hover:underline">
+                📍 Buka Google Maps
+              </a>
+            </td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${getPriorityBadgeClass(item.prioritas)}">${item.prioritas}</span>
             </td>
-            <td class="py-3 px-3.5 font-mono font-semibold text-emerald-400 whitespace-nowrap">${item.durasiIdleSebelumOrder}</td>
+            <td class="py-3 px-3.5 font-mono text-emerald-400 whitespace-nowrap">${item.durasiIdleSebelumOrder || '-'}</td>
+            <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${item.estimasiEta || '-'}</td>
+            <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-400' : 'text-emerald-400'}">${item.selisihOtwEta || '-'}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(item.status)}</td>
             <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${item.totalDurasi || '-'}</td>
           </tr>
@@ -912,6 +989,7 @@
         incomingBanner.classList.remove('hidden');
         document.getElementById('mobileOrderId').textContent = `${unit.pendingOrder.orderId} (Menunggu Accept)`;
         document.getElementById('mobileSiteDest').textContent = unit.pendingOrder.siteDestinasi;
+        document.getElementById('mobileMapsBtn').href = unit.pendingOrder.linkMapsSite || getSiteMapsUrl(unit.pendingOrder.siteDestinasi);
         const prioBadge = document.getElementById('mobilePriorityBadge');
         prioBadge.textContent = unit.pendingOrder.prioritas;
         prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.pendingOrder.prioritas)}`;
@@ -919,18 +997,21 @@
         incomingBanner.classList.add('hidden');
         document.getElementById('mobileOrderId').textContent = unit.activeOrderId;
         document.getElementById('mobileSiteDest').textContent = unit.activeSite;
+        document.getElementById('mobileMapsBtn').href = unit.activeMapsLink || getSiteMapsUrl(unit.activeSite);
         const prioBadge = document.getElementById('mobilePriorityBadge');
         prioBadge.textContent = unit.activePriority;
         prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.activePriority)}`;
       }
 
-      document.getElementById('mobileIdlePrevDuration').textContent = unit.activeIdleDuration || '-';
+      document.getElementById('mobileEtaVal').textContent = unit.estimasiEta || '-';
+      const diffEl = document.getElementById('mobileDiffVal');
+      diffEl.textContent = unit.selisihOtwEta || '-';
+      diffEl.className = unit.selisihOtwEta && unit.selisihOtwEta.includes('Terlambat') ? 'font-bold mt-0.5 text-rose-400' : 'font-bold mt-0.5 text-emerald-400';
+
       document.getElementById('mobileCurrentStatusBadge').innerHTML = getStatusBadgeHtml(unit.status);
       document.getElementById('mobileLiveTimer').textContent = formatElapsed(unit.tsCurrentStatusStart);
+      document.getElementById('timerTitle').textContent = unit.status === 'Idle' ? 'Durasi Standby' : 'Durasi Tugas';
 
-      document.getElementById('timerTitle').textContent = unit.status === 'Idle' ? 'Durasi Idle (Siaga)' : 'Durasi Tugas Aktif';
-
-      // Highlight Tombol
       const buttons = [
         { id: 'btnStatusAccept', name: 'Accept Order', cls: 'border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10' },
         { id: 'btnStatusOtw', name: 'OTW to Site', cls: 'border-orange-500 bg-orange-500/20 text-white shadow-lg shadow-orange-500/10' },
@@ -978,16 +1059,15 @@
         const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
         const json = await res.json();
         if (json.status === 'success' && Array.isArray(json.data)) {
-          // Sinkronisasi data order dari Sheets
           const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
           if (sheetRecords.length > 0) {
-            orderList = sheetRecords.reverse(); // Terbaru di atas
+            orderList = sheetRecords.reverse();
             localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
           }
           renderAll();
         }
       } catch (err) {
-        console.warn('Gagal sinkronisasi data dari Apps Script:', err);
+        console.warn('Gagal sinkronisasi dari Apps Script:', err);
       } finally {
         if (showSpinner) icon.classList.remove('animate-spin');
       }
