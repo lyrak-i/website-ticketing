@@ -180,15 +180,11 @@
               <input id="dispatchWaInput" type="text" required placeholder="6281234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
             </div>
 
+            <!-- Dropdown Site Destinasi Diperbaiki (Tanpa Tombol Link Maps Eksternal) -->
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi (Tersedia Link Maps)</label>
-              <select id="dispatchSiteSelect" onchange="handleSiteSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi</label>
+              <select id="dispatchSiteSelect" onchange="updateWaPreview()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
               </select>
-              <div class="mt-1 flex items-center justify-between text-[11px]">
-                <a id="dispatchSiteMapsLink" href="#" target="_blank" rel="noopener" class="text-sky-400 hover:underline flex items-center gap-1 font-mono">
-                  📍 Buka Titik Google Maps Site
-                </a>
-              </div>
             </div>
 
             <div>
@@ -263,7 +259,7 @@
               <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <th class="py-3 px-3.5">Order ID</th>
                 <th class="py-3 px-3.5">Nama MBP</th>
-                <th class="py-3 px-3.5">Site & Maps</th>
+                <th class="py-3 px-3.5">Site Destinasi</th>
                 <th class="py-3 px-3.5">Prioritas</th>
                 <th class="py-3 px-3.5">Idle Sblm Order</th>
                 <th class="py-3 px-3.5">Estimasi ETA</th>
@@ -307,7 +303,7 @@
           </span>
         </div>
 
-        <!-- Site & Direct Maps Button -->
+        <!-- Site & Direct Maps Button untuk Teknisi Lapangan -->
         <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
           <div class="flex items-start justify-between gap-2">
             <div>
@@ -316,7 +312,7 @@
             </div>
           </div>
           <a id="mobileMapsBtn" href="#" target="_blank" rel="noopener" class="w-full py-2 px-3 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
-            🗺️ Buka Rute Google Maps ke Site
+            🗺️ Buka Rute Navigasi Google Maps
           </a>
         </div>
 
@@ -354,7 +350,6 @@
         </div>
 
         <div class="grid grid-cols-1 gap-2.5">
-          <!-- 1. Accept Order -->
           <button onclick="handleMbpStatusClick('Accept Order')" id="btnStatusAccept" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">📋</span>
@@ -366,7 +361,6 @@
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <!-- 2. OTW to Site -->
           <button onclick="handleMbpStatusClick('OTW to Site')" id="btnStatusOtw" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">🚚</span>
@@ -378,7 +372,6 @@
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <!-- 3. Onsite -->
           <button onclick="handleMbpStatusClick('Onsite')" id="btnStatusOnsite" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">⚡</span>
@@ -390,7 +383,6 @@
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
           </button>
 
-          <!-- 4. Idle -->
           <button onclick="handleMbpStatusClick('Idle')" id="btnStatusIdle" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">🟢</span>
@@ -407,8 +399,8 @@
     </section>
   </main>
 
-  <!-- MODAL KONFIGURASI API -->
-  <div id="configModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+  <!-- MODAL KONFIGURASI API (RINGAN, TANPA BACKDROP BLUR) -->
+  <div id="configModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <h3 class="font-bold text-white text-sm sm:text-base">⚙️ Konfigurasi Google Apps Script API</h3>
@@ -416,7 +408,7 @@
       </div>
       <div class="space-y-2">
         <label class="block text-xs font-medium text-slate-300">Web App URL (`.../exec`)</label>
-        <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+        <input id="gasUrlInput" type="text" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
         <p class="text-[11px] text-slate-400 leading-relaxed">
           Tempelkan Web App URL dari deployment Google Apps Script Anda untuk sinkronisasi 2 arah dengan Google Sheets.
         </p>
@@ -446,7 +438,7 @@
     let activeRole = 'omc';
     let selectedMobileMbp = '';
 
-    // Database Site & Koordinat Real Titik Tower
+    // Database Hardcoded Site & Koordinat
     const SITE_LOCATIONS = [
       { name: 'SITE-PLM-014 (Ilir Barat)', lat: -2.9909, lng: 104.7565 },
       { name: 'SITE-PLM-089 (Seberang Ulu)', lat: -3.0034, lng: 104.7721 },
@@ -464,7 +456,6 @@
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteName)}`;
     }
 
-    // Perhitungan Jarak Haversine (km) & ETA Mobil 20 km/jam
     function calculateHaversineKm(lat1, lon1, lat2, lon2) {
       const R = 6371.0;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -477,7 +468,7 @@
     }
 
     function calculateCarEtaSeconds(distanceKm) {
-      const SPEED_KMH = 20.0; // Sesuai permintaan: laju mobil 20 km/jam
+      const SPEED_KMH = 20.0;
       const hours = distanceKm / SPEED_KMH;
       return Math.round(hours * 3600);
     }
@@ -581,17 +572,11 @@
       }, 10000);
     }
 
+    // Mengisi dropdown site dari array SITE_LOCATIONS secara rapi
     function populateSiteOptions() {
       const sel = document.getElementById('dispatchSiteSelect');
+      if (!sel) return;
       sel.innerHTML = SITE_LOCATIONS.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-      handleSiteSelectChange();
-    }
-
-    function handleSiteSelectChange() {
-      const siteName = document.getElementById('dispatchSiteSelect').value;
-      const mapsUrl = getSiteMapsUrl(siteName);
-      const linkEl = document.getElementById('dispatchSiteMapsLink');
-      if (linkEl) linkEl.href = mapsUrl;
       updateWaPreview();
     }
 
@@ -665,7 +650,6 @@
       renderAll();
     }
 
-    // Role 2: Mobile MBP Action
     async function handleMbpStatusClick(newStatus) {
       const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp);
       if (!unit) return;
@@ -739,12 +723,10 @@
         }
 
       } else if (newStatus === 'OTW to Site') {
-        // Ambil lokasi GPS aktual MBP saat tombol OTW ditekan
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (pos) => processOtwWithCoords(pos.coords.latitude, pos.coords.longitude, unit, nowIso, nowMs),
             () => {
-              // Fallback koordinat kota jika izin GPS ditolak/tidak tersedia
               processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs);
             },
             { enableHighAccuracy: true, timeout: 5000 }
@@ -836,7 +818,6 @@
       }
     }
 
-    // Hitung ETA dari koordinat GPS aktual
     async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
       const siteObj = SITE_LOCATIONS.find(s => s.name === unit.activeSite) || SITE_LOCATIONS[0];
       const distKm = calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng);
@@ -921,7 +902,6 @@
       document.getElementById('distLabelMoving').textContent = `${movingPct}%`;
       document.getElementById('distLabelOnsite').textContent = `${onsitePct}%`;
 
-      // Tabel Status Armada
       const fleetTbody = document.getElementById('fleetTableBody');
       fleetTbody.innerHTML = fleetList.map((unit, idx) => {
         const timerStr = formatElapsed(unit.tsCurrentStatusStart);
@@ -945,7 +925,6 @@
         `;
       }).join('');
 
-      // Tabel Log Order ID
       document.getElementById('totalOrdersCount').textContent = orderList.length;
       const orderTbody = document.getElementById('orderLogTableBody');
       if (orderList.length === 0) {
@@ -961,11 +940,8 @@
           <tr class="hover:bg-slate-800/40 transition">
             <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${item.orderId}</td>
             <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${item.namaMbp}</td>
-            <td class="py-3 px-3.5 whitespace-nowrap">
-              <div class="text-slate-200">${item.siteDestinasi}</div>
-              <a href="${item.linkMapsSite || getSiteMapsUrl(item.siteDestinasi)}" target="_blank" rel="noopener" class="text-[11px] font-mono text-sky-400 hover:underline">
-                📍 Buka Google Maps
-              </a>
+            <td class="py-3 px-3.5 whitespace-nowrap text-slate-200 font-medium">
+              ${item.siteDestinasi}
             </td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${getPriorityBadgeClass(item.prioritas)}">${item.prioritas}</span>
