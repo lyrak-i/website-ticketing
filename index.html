@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MBP Command & Field Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+    body { background-color: #090d16; color: #f1f5f9; }
+    .status-btn:active { transform: scale(0.98); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- TOP NAVIGATION & ROLE SWITCHER -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shadow-lg shadow-amber-500/20">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base sm:text-lg tracking-tight text-white">MBP Dispatch & Monitor</h1>
+            <span id="connectionBadge" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              Mode Demo Lokal
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Mobile Backup Power Real-Time Tracking System</p>
+        </div>
+      </div>
+
+      <!-- Role Switcher Tabs -->
+      <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <button id="tabOmc" onclick="switchRole('omc')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
+          🖥️ Dashboard OMC
+        </button>
+        <button id="tabMbp" onclick="switchRole('mbp')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+          📱 Mobile MBP (Lapangan)
+        </button>
+      </div>
+
+      <!-- API Config & Manual Refresh -->
+      <div class="flex items-center gap-2">
+        <button onclick="syncFromServer(true)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+          <span id="syncIcon">🔄</span> Sync
+        </button>
+        <button onclick="toggleConfigModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+          ⚙️ API Sheets
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ========================================== -->
+    <!-- ROLE 1: DASHBOARD OMC (DISPATCHER & TABLE) -->
+    <!-- ========================================== -->
+    <section id="viewOmc" class="space-y-6">
+      
+      <!-- Summary KPI Strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs text-slate-400 uppercase font-medium">Total Unit MBP</p>
+          <p id="kpiTotal" class="text-2xl font-bold font-mono text-white mt-1">0</p>
+        </div>
+        <div class="bg-slate-900/90 border border-emerald-500/20 rounded-xl p-4">
+          <p class="text-xs text-emerald-400 uppercase font-medium">Siaga (Idle)</p>
+          <p id="kpiIdle" class="text-2xl font-bold font-mono text-emerald-400 mt-1">0</p>
+        </div>
+        <div class="bg-slate-900/90 border border-amber-500/20 rounded-xl p-4">
+          <p class="text-xs text-amber-400 uppercase font-medium">Mobilisasi (Accept / OTW)</p>
+          <p id="kpiMoving" class="text-2xl font-bold font-mono text-amber-400 mt-1">0</p>
+        </div>
+        <div class="bg-slate-900/90 border border-sky-500/20 rounded-xl p-4">
+          <p class="text-xs text-sky-400 uppercase font-medium">Aktif Backup (Onsite)</p>
+          <p id="kpiOnsite" class="text-2xl font-bold font-mono text-sky-400 mt-1">0</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        <!-- Panel Kiri: WhatsApp Dispatcher Form -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>📡</span> WhatsApp Dispatcher
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Assign tiket site & kirim instruksi instan via WA</p>
+            </div>
+          </div>
+
+          <form id="dispatchForm" onsubmit="handleDispatchSubmit(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Pilih Tim / Nama MBP</label>
+              <select id="dispatchMbpSelect" onchange="handleMbpDispatchChange()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Nomor WhatsApp MBP (Format 628...)</label>
+              <input id="dispatchWaInput" type="text" required placeholder="6281234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Site Destinasi</label>
+              <select id="dispatchSiteSelect" onchange="toggleCustomSiteInput()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="SITE-PLM-014 (Ilir Barat)">SITE-PLM-014 (Ilir Barat)</option>
+                <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
+                <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
+                <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
+                <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
+                <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
+                <option value="CUSTOM">+ Ketik Nama Site Manual...</option>
+              </select>
+              <input id="dispatchCustomSite" type="text" placeholder="Masukkan Kode / Nama Site..." class="hidden mt-2 w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Prioritas Tiket</label>
+              <select id="dispatchPrioritySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="Critical">🔴 Critical (Genset Utama Down / VIP)</option>
+                <option value="High" selected>🟠 High (Baterai Low Voltage)</option>
+                <option value="Medium">🟡 Medium (PLN Off Berkepanjangan)</option>
+                <option value="Low">🟢 Low (Preventive / Standby)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
+              <span>💬</span> Kirim Tiket via WA & Update Sheet
+            </button>
+          </form>
+        </div>
+
+        <!-- Panel Kanan: Tabel Monitoring Real-Time -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Tabel Monitoring Real-Time Teknisi MBP
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Timer berdetak otomatis berdasarkan selisih waktu sejak perubahan status terakhir</p>
+            </div>
+            <span id="lastSyncText" class="text-xs font-mono text-slate-400">Update: Baru saja</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-3.5 px-4">Nama MBP</th>
+                  <th class="py-3.5 px-4">Site Destinasi</th>
+                  <th class="py-3.5 px-4">Prioritas</th>
+                  <th class="py-3.5 px-4">Status Terkini</th>
+                  <th class="py-3.5 px-4">Timer Real-Time</th>
+                  <th class="py-3.5 px-4">Log Durasi Status</th>
+                </tr>
+              </thead>
+              <tbody id="omcTableBody" class="divide-y divide-slate-800/70 text-sm">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- ROLE 2: TAMPILAN MOBILE MBP (FOCUS MODE)   -->
+    <!-- ========================================== -->
+    <section id="viewMbp" class="hidden max-w-md mx-auto space-y-5">
+      
+      <!-- Pilihan Identitas Teknisi MBP -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-2">
+          👷 Pilih Identitas Unit MBP Anda
+        </label>
+        <select id="mobileMbpSelect" onchange="handleMobileMbpSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-amber-500">
+        </select>
+      </div>
+
+      <!-- Kartu Detail Tugas Aktif -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 relative overflow-hidden">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Order ID Aktif</span>
+            <h3 id="mobileOrderId" class="text-lg font-mono font-bold text-white">ORD-20261104-001</h3>
+          </div>
+          <span id="mobilePriorityBadge" class="px-3 py-1 rounded-full text-xs font-bold">
+            Critical
+          </span>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3.5">
+          <span class="text-[11px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
+          <p id="mobileSiteDest" class="text-base font-bold text-white mt-0.5">SITE-PLM-014 (Ilir Barat)</p>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+          <div>
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 block">Status Saat Ini</span>
+            <div id="mobileCurrentStatusBadge" class="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold">
+              Onsite
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 block">Durasi Berjalan</span>
+            <p id="mobileLiveTimer" class="text-xl font-mono font-bold text-amber-400 mt-0.5">00h 00m 00s</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Tombol Status Utama Berukuran Besar (1x Klik) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">
+            Update Status Lapangan (1x Klik)
+          </h4>
+          <span id="mobileSyncFeedback" class="text-xs font-mono text-emerald-400 hidden">✓ Tersimpan</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3">
+          <button onclick="updateMbpStatus('Idle')" id="btnStatusIdle" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3.5 text-left">
+              <span class="text-2xl">🟢</span>
+              <div>
+                <p class="font-bold text-base">1. Idle (Siaga)</p>
+                <p class="text-xs opacity-75">Standby di homebase / tugas selesai</p>
+              </div>
+            </div>
+            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+          </button>
+
+          <button onclick="updateMbpStatus('Accept Order')" id="btnStatusAccept" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3.5 text-left">
+              <span class="text-2xl">📋</span>
+              <div>
+                <p class="font-bold text-base">2. Accept Order</p>
+                <p class="text-xs opacity-75">Tiket diterima, persiapan genset/MBP</p>
+              </div>
+            </div>
+            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+          </button>
+
+          <button onclick="updateMbpStatus('OTW to Site')" id="btnStatusOtw" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3.5 text-left">
+              <span class="text-2xl">🚚</span>
+              <div>
+                <p class="font-bold text-base">3. OTW to Site</p>
+                <p class="text-xs opacity-75">Sedang dalam perjalanan menuju lokasi site</p>
+              </div>
+            </div>
+            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+          </button>
+
+          <button onclick="updateMbpStatus('Onsite')" id="btnStatusOnsite" class="status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3.5 text-left">
+              <span class="text-2xl">⚡</span>
+              <div>
+                <p class="font-bold text-base">4. Onsite</p>
+                <p class="text-xs opacity-75">Tiba di site & proses catu daya MBP aktif</p>
+              </div>
+            </div>
+            <span class="text-xs font-mono uppercase px-2.5 py-1 rounded bg-black/20">Set</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- MODAL KONFIGURASI GOOGLE APPS SCRIPT WEB APP URL -->
+  <div id="configModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-white text-base">⚙️ Konfigurasi Google Apps Script API</h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-slate-300">Google Apps Script Web App URL (`.../exec`)</label>
+        <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Kosongkan jika ingin mencoba dalam <strong>Mode Demo Lokal</strong> (data tersimpan di browser). Jika diisi dengan URL Web App Google Apps Script Anda, aplikasi akan melakukan sinkronisasi 2 arah secara langsung ke Google Sheets.
+        </p>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="resetDemoData()" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold mr-auto">
+          Reset Data Demo
+        </button>
+        <button onclick="toggleConfigModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">
+          Batal
+        </button>
+        <button onclick="saveGasUrl()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
+          Simpan & Hubungkan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    // Jika Anda ingin langsung hardcode URL Web App, isi di bawah ini:
+    const DEFAULT_GAS_URL = '';
+    const STORAGE_KEY_DATA = 'mbp_monitor_state_v1';
+    const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
+
+    let gasWebAppUrl = localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
+    let activeRole = 'omc';
+    let selectedMobileMbp = '';
+    let mbpList = [];
+
+    // Seed Data Awal untuk Mode Demo / Fallback
+    function getSeedData() {
+      const now = Date.now();
+      const minAgo = m => new Date(now - m * 60000).toISOString();
+      return [
+        {
+          orderId: 'ORD-20261104-001',
+          namaMbp: 'MBP-01 (Tim Alpha)',
+          noWa: '6281234567801',
+          siteDestinasi: 'SITE-PLM-014 (Ilir Barat)',
+          prioritas: 'Critical',
+          status: 'Onsite',
+          tsIdle: minAgo(120),
+          tsAccept: minAgo(95),
+          tsOtw: minAgo(90),
+          tsOnsite: minAgo(48),
+          totalDurasi: 'Accept: 05m 00s | OTW: 42m 00s'
+        },
+        {
+          orderId: 'ORD-20261104-002',
+          namaMbp: 'MBP-02 (Tim Bravo)',
+          noWa: '6281234567802',
+          siteDestinasi: 'SITE-PLM-089 (Seberang Ulu)',
+          prioritas: 'High',
+          status: 'OTW to Site',
+          tsIdle: minAgo(60),
+          tsAccept: minAgo(31),
+          tsOtw: minAgo(26),
+          tsOnsite: '',
+          totalDurasi: 'Accept: 05m 00s'
+        },
+        {
+          orderId: 'ORD-20261104-003',
+          namaMbp: 'MBP-03 (Tim Charlie)',
+          noWa: '6281234567803',
+          siteDestinasi: 'SITE-BTA-012 (Baturaja)',
+          prioritas: 'Medium',
+          status: 'Accept Order',
+          tsIdle: minAgo(40),
+          tsAccept: minAgo(8),
+          tsOtw: '',
+          tsOnsite: '',
+          totalDurasi: 'Idle: 32m 00s'
+        },
+        {
+          orderId: '-',
+          namaMbp: 'MBP-04 (Tim Delta)',
+          noWa: '6281234567804',
+          siteDestinasi: '-',
+          prioritas: 'Low',
+          status: 'Idle',
+          tsIdle: minAgo(145),
+          tsAccept: '',
+          tsOtw: '',
+          tsOnsite: '',
+          totalDurasi: 'Last Ticket: 01h 45m 20s'
+        }
+      ];
+    }
+
+    // Ambil timestamp awal dari status yang sedang aktif
+    function getActiveStatusStartIso(item) {
+      if (item.status === 'Idle') return item.tsIdle;
+      if (item.status === 'Accept Order') return item.tsAccept;
+      if (item.status === 'OTW to Site') return item.tsOtw;
+      if (item.status === 'Onsite') return item.tsOnsite;
+      return item.tsIdle;
+    }
+
+    // Format milidetik ke "01h 24m 10s"
+    function formatElapsed(startIso) {
+      if (!startIso) return '00h 00m 00s';
+      const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
+      const totalSeconds = Math.floor(diffMs / 1000);
+      const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const secs = String(totalSeconds % 60).padStart(2, '0');
+      return `${hrs}h ${mins}m ${secs}s`;
+    }
+
+    // Format ringkas untuk log durasi
+    function formatShortDuration(ms) {
+      if (!ms || ms < 0) return '00m 00s';
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = n => String(n).padStart(2, '0');
+      return h > 0 ? `${pad(h)}h ${pad(m)}m ${pad(s)}s` : `${pad(m)}m ${pad(s)}s`;
+    }
+
+    // Styling Badge Status
+    function getStatusBadgeHtml(status) {
+      const styles = {
+        'Idle': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+        'Accept Order': 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+        'OTW to Site': 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+        'Onsite': 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+      };
+      const dot = {
+        'Idle': 'bg-emerald-400',
+        'Accept Order': 'bg-amber-400',
+        'OTW to Site': 'bg-orange-400 animate-ping',
+        'Onsite': 'bg-sky-400 animate-pulse'
+      };
+      const cls = styles[status] || styles['Idle'];
+      const dotCls = dot[status] || dot['Idle'];
+      return `<span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ${cls}">
+        <span class="w-2 h-2 rounded-full ${dotCls}"></span>
+        ${status}
+      </span>`;
+    }
+
+    // Styling Badge Prioritas
+    function getPriorityBadgeClass(prio) {
+      const map = {
+        'Critical': 'bg-rose-500/20 text-rose-400 border border-rose-500/40',
+        'High': 'bg-orange-500/20 text-orange-400 border border-orange-500/40',
+        'Medium': 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
+        'Low': 'bg-slate-800 text-slate-300 border border-slate-700'
+      };
+      return map[prio] || map['Low'];
+    }
+
+    // Inisialisasi Data
+    async function initApp() {
+      updateConnectionBadge();
+      const saved = localStorage.getItem(STORAGE_KEY_DATA);
+      if (saved) {
+        mbpList = JSON.parse(saved);
+      } else {
+        mbpList = getSeedData();
+        localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(mbpList));
+      }
+      selectedMobileMbp = mbpList[0]?.namaMbp || '';
+      populateSelectDropdowns();
+      renderAll();
+
+      if (gasWebAppUrl) {
+        await syncFromServer(false);
+      }
+
+      // Jalankan Real-Time Timer setiap 1 detik
+      setInterval(tickRealtimeTimers, 1000);
+
+      // Auto-poll Google Sheets setiap 10 detik jika URL dikonfigurasi
+      setInterval(() => {
+        if (gasWebAppUrl) syncFromServer(false);
+      }, 10000);
+    }
+
+    // Sinkronisasi antar Tab Browser (jika OMC & MBP dibuka di 2 tab berbeda)
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_KEY_DATA && e.newValue) {
+        mbpList = JSON.parse(e.newValue);
+        renderAll();
+      }
+    });
+
+    function updateConnectionBadge() {
+      const badge = document.getElementById('connectionBadge');
+      if (gasWebAppUrl) {
+        badge.textContent = 'Terhubung ke Google Sheets';
+        badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+      } else {
+        badge.textContent = 'Mode Demo Lokal';
+        badge.className = 'text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30';
+      }
+    }
+
+    // Populate Dropdown di Dashboard OMC & Mobile MBP
+    function populateSelectDropdowns() {
+      const omcSelect = document.getElementById('dispatchMbpSelect');
+      const mobSelect = document.getElementById('mobileMbpSelect');
+      if (!omcSelect || !mobSelect) return;
+
+      const currentOmcVal = omcSelect.value || mbpList[0]?.namaMbp;
+      const currentMobVal = selectedMobileMbp || mbpList[0]?.namaMbp;
+
+      omcSelect.innerHTML = mbpList.map(m =>
+        `<option value="${m.namaMbp}">${m.namaMbp} — [${m.status}]</option>`
+      ).join('');
+      omcSelect.value = currentOmcVal;
+
+      mobSelect.innerHTML = mbpList.map(m =>
+        `<option value="${m.namaMbp}">${m.namaMbp}</option>`
+      ).join('');
+      mobSelect.value = currentMobVal;
+
+      handleMbpDispatchChange();
+    }
+
+    function handleMbpDispatchChange() {
+      const selectedName = document.getElementById('dispatchMbpSelect').value;
+      const found = mbpList.find(m => m.namaMbp === selectedName);
+      if (found) {
+        document.getElementById('dispatchWaInput').value = found.noWa || '';
+      }
+    }
+
+    function toggleCustomSiteInput() {
+      const sel = document.getElementById('dispatchSiteSelect').value;
+      const customInput = document.getElementById('dispatchCustomSite');
+      if (sel === 'CUSTOM') {
+        customInput.classList.remove('hidden');
+        customInput.required = true;
+      } else {
+        customInput.classList.add('hidden');
+        customInput.required = false;
+      }
+    }
+
+    // Render seluruh komponen OMC & Mobile MBP
+    function renderAll() {
+      renderOmcDashboard();
+      renderMobileMbpView();
+    }
+
+    function renderOmcDashboard() {
+      // Update KPI
+      document.getElementById('kpiTotal').textContent = mbpList.length;
+      document.getElementById('kpiIdle').textContent = mbpList.filter(m => m.status === 'Idle').length;
+      document.getElementById('kpiMoving').textContent = mbpList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
+      document.getElementById('kpiOnsite').textContent = mbpList.filter(m => m.status === 'Onsite').length;
+
+      // Render Baris Tabel
+      const tbody = document.getElementById('omcTableBody');
+      tbody.innerHTML = mbpList.map((item, idx) => {
+        const startIso = getActiveStatusStartIso(item);
+        const timerStr = formatElapsed(startIso);
+        const prioClass = getPriorityBadgeClass(item.prioritas);
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3.5 px-4">
+              <div class="font-bold text-white">${item.namaMbp}</div>
+              <div class="text-xs font-mono text-slate-400">WA: +${item.noWa} • <span class="text-slate-300">${item.orderId}</span></div>
+            </td>
+            <td class="py-3.5 px-4 font-medium text-slate-200">${item.siteDestinasi}</td>
+            <td class="py-3.5 px-4">
+              <span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${prioClass}">${item.prioritas}</span>
+            </td>
+            <td class="py-3.5 px-4">${getStatusBadgeHtml(item.status)}</td>
+            <td class="py-3.5 px-4">
+              <span data-timer-idx="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg text-xs">
+                ${timerStr}
+              </span>
+            </td>
+            <td class="py-3.5 px-4 text-xs font-mono text-slate-400">${item.totalDurasi || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderMobileMbpView() {
+      const item = mbpList.find(m => m.namaMbp === selectedMobileMbp) || mbpList[0];
+      if (!item) return;
+
+      document.getElementById('mobileOrderId').textContent = item.orderId || '-';
+      document.getElementById('mobileSiteDest').textContent = item.siteDestinasi || '-';
+
+      const prioBadge = document.getElementById('mobilePriorityBadge');
+      prioBadge.textContent = item.prioritas || 'Low';
+      prioBadge.className = `px-3 py-1 rounded-full text-xs font-bold ${getPriorityBadgeClass(item.prioritas)}`;
+
+      document.getElementById('mobileCurrentStatusBadge').outerHTML =
+        `<div id="mobileCurrentStatusBadge" class="mt-1">${getStatusBadgeHtml(item.status)}</div>`;
+
+      const startIso = getActiveStatusStartIso(item);
+      document.getElementById('mobileLiveTimer').textContent = formatElapsed(startIso);
+
+      // Highlight tombol status yang sedang aktif
+      const statusMap = [
+        { id: 'btnStatusIdle', name: 'Idle', activeCls: 'border-emerald-500 bg-emerald-500/20 text-white shadow-lg shadow-emerald-500/10' },
+        { id: 'btnStatusAccept', name: 'Accept Order', activeCls: 'border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10' },
+        { id: 'btnStatusOtw', name: 'OTW to Site', activeCls: 'border-orange-500 bg-orange-500/20 text-white shadow-lg shadow-orange-500/10' },
+        { id: 'btnStatusOnsite', name: 'Onsite', activeCls: 'border-sky-500 bg-sky-500/20 text-white shadow-lg shadow-sky-500/10' }
+      ];
+
+      statusMap.forEach(st => {
+        const btn = document.getElementById(st.id);
+        if (item.status === st.name) {
+          btn.className = `status-btn w-full py-4 px-5 rounded-xl border-2 flex items-center justify-between transition-all ${st.activeCls}`;
+        } else {
+          btn.className = 'status-btn w-full py-4 px-5 rounded-xl border-2 border-slate-800 bg-slate-950/70 hover:border-slate-700 text-slate-300 flex items-center justify-between transition-all';
+        }
+      });
+    }
+
+    // Update hanya angka Timer setiap detik tanpa me-render ulang DOM tabel
+    function tickRealtimeTimers() {
+      mbpList.forEach((item, idx) => {
+        const el = document.querySelector(`[data-timer-idx="${idx}"]`);
+        if (el) {
+          el.textContent = formatElapsed(getActiveStatusStartIso(item));
+        }
+      });
+
+      const activeItem = mbpList.find(m => m.namaMbp === selectedMobileMbp) || mbpList[0];
+      if (activeItem) {
+        const mobTimer = document.getElementById('mobileLiveTimer');
+        if (mobTimer) mobTimer.textContent = formatElapsed(getActiveStatusStartIso(activeItem));
+      }
+    }
+
+    function handleMobileMbpSelectChange() {
+      selectedMobileMbp = document.getElementById('mobileMbpSelect').value;
+      renderMobileMbpView();
+    }
+
+    // Role 2 Action: 1x Klik Update Status MBP
+    async function updateMbpStatus(newStatus) {
+      const idx = mbpList.findIndex(m => m.namaMbp === selectedMobileMbp);
+      if (idx === -1) return;
+
+      const item = mbpList[idx];
+      const prevStatus = item.status;
+      const nowIso = new Date().toISOString();
+      const nowMs = Date.now();
+
+      // Hitung durasi status sebelumnya secara lokal (Optimistic Update)
+      const prevStartIso = getActiveStatusStartIso(item);
+      if (prevStartIso && prevStatus !== newStatus) {
+        const elapsedMs = nowMs - new Date(prevStartIso).getTime();
+        const entry = `${prevStatus}: ${formatShortDuration(elapsedMs)}`;
+        item.totalDurasi = (!item.totalDurasi || item.totalDurasi === '-') ? entry : `${item.totalDurasi} | ${entry}`;
+      }
+
+      if (newStatus === 'Idle') {
+        item.tsIdle = nowIso;
+        item.orderId = '-';
+        item.siteDestinasi = '-';
+        item.prioritas = 'Low';
+      } else if (newStatus === 'Accept Order') {
+        item.tsAccept = nowIso;
+        item.tsOtw = '';
+        item.tsOnsite = '';
+        item.totalDurasi = `Idle: ${item.tsIdle ? formatShortDuration(nowMs - new Date(item.tsIdle).getTime()) : '00m 00s'}`;
+      } else if (newStatus === 'OTW to Site') {
+        item.tsOtw = nowIso;
+      } else if (newStatus === 'Onsite') {
+        item.tsOnsite = nowIso;
+      }
+
+      item.status = newStatus;
+      saveAndBroadcast();
+
+      // Tampilkan indikator tersimpan
+      const fb = document.getElementById('mobileSyncFeedback');
+      fb.classList.remove('hidden');
+      setTimeout(() => fb.classList.add('hidden'), 2000);
+
+      // Kirim POST ke Google Apps Script jika terhubung
+      if (gasWebAppUrl) {
+        await postToGas({
+          action: 'updateStatus',
+          namaMbp: item.namaMbp,
+          newStatus: newStatus,
+          timestamp: nowIso
+        });
+      }
+    }
+
+    // Role 1 Action: Dispatch Tiket & Redirect ke WhatsApp
+    async function handleDispatchSubmit(event) {
+      event.preventDefault();
+      const namaMbp = document.getElementById('dispatchMbpSelect').value;
+      const rawWa = document.getElementById('dispatchWaInput').value.replace(/\D/g, '');
+      const siteSelectVal = document.getElementById('dispatchSiteSelect').value;
+      const siteDestinasi = siteSelectVal === 'CUSTOM'
+        ? document.getElementById('dispatchCustomSite').value.trim()
+        : siteSelectVal;
+      const prioritas = document.getElementById('dispatchPrioritySelect').value;
+
+      if (!siteDestinasi || !rawWa) return;
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const orderId = `ORD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+      // Update data lokal
+      const idx = mbpList.findIndex(m => m.namaMbp === namaMbp);
+      if (idx !== -1) {
+        mbpList[idx].orderId = orderId;
+        mbpList[idx].noWa = rawWa;
+        mbpList[idx].siteDestinasi = siteDestinasi;
+        mbpList[idx].prioritas = prioritas;
+        saveAndBroadcast();
+      }
+
+      // Buka Link WhatsApp sesuai format yang diminta
+      const waText = encodeURIComponent(`Ada masalah di site ${siteDestinasi}`);
+      const waUrl = `https://wa.me/${rawWa}?text=${waText}`;
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+      // Simpan ke Google Sheets di background
+      if (gasWebAppUrl) {
+        await postToGas({
+          action: 'dispatchTicket',
+          orderId,
+          namaMbp,
+          noWa: rawWa,
+          siteDestinasi,
+          prioritas,
+          timestamp: now.toISOString()
+        });
+      }
+    }
+
+    function saveAndBroadcast() {
+      localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(mbpList));
+      populateSelectDropdowns();
+      renderAll();
+      document.getElementById('lastSyncText').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+    }
+
+    // Komunikasi GET & POST dengan Google Apps Script
+    async function syncFromServer(showSpinner = false) {
+      if (!gasWebAppUrl) {
+        document.getElementById('lastSyncText').textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
+        return;
+      }
+      const icon = document.getElementById('syncIcon');
+      if (showSpinner) icon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
+        const json = await res.json();
+        if (json.status === 'success' && Array.isArray(json.data)) {
+          mbpList = json.data;
+          saveAndBroadcast();
+        }
+      } catch (err) {
+        console.warn('Gagal mengambil data dari GAS, menggunakan state lokal:', err);
+      } finally {
+        if (showSpinner) icon.classList.remove('animate-spin');
+      }
+    }
+
+    async function postToGas(payload) {
+      try {
+        const res = await fetch(gasWebAppUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+          redirect: 'follow'
+        });
+        const json = await res.json();
+        if (json.status === 'success' && Array.isArray(json.data)) {
+          mbpList = json.data;
+          saveAndBroadcast();
+        }
+      } catch (err) {
+        console.warn('Gagal POST ke GAS:', err);
+      }
+    }
+
+    // Navigasi antar Role
+    function switchRole(role) {
+      activeRole = role;
+      const viewOmc = document.getElementById('viewOmc');
+      const viewMbp = document.getElementById('viewMbp');
+      const tabOmc = document.getElementById('tabOmc');
+      const tabMbp = document.getElementById('tabMbp');
+
+      if (role === 'omc') {
+        viewOmc.classList.remove('hidden');
+        viewMbp.classList.add('hidden');
+        tabOmc.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
+        tabMbp.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+      } else {
+        viewOmc.classList.add('hidden');
+        viewMbp.classList.remove('hidden');
+        tabMbp.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
+        tabOmc.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+      }
+      renderAll();
+    }
+
+    // Modal Konfigurasi URL
+    function toggleConfigModal() {
+      const modal = document.getElementById('configModal');
+      const input = document.getElementById('gasUrlInput');
+      if (modal.classList.contains('hidden')) {
+        input.value = gasWebAppUrl;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function saveGasUrl() {
+      gasWebAppUrl = document.getElementById('gasUrlInput').value.trim();
+      localStorage.setItem(STORAGE_KEY_URL, gasWebAppUrl);
+      updateConnectionBadge();
+      toggleConfigModal();
+      if (gasWebAppUrl) syncFromServer(true);
+    }
+
+    function resetDemoData() {
+      localStorage.removeItem(STORAGE_KEY_DATA);
+      mbpList = getSeedData();
+      saveAndBroadcast();
+      toggleConfigModal();
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
