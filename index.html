@@ -168,7 +168,7 @@
             <p class="text-xs text-slate-400 mt-0.5">Assign Order ID & kirim tiket instan ke WhatsApp</p>
           </div>
 
-          <form id="dispatchForm" onsubmit="handleDispatchSubmit(event)" class="space-y-3.5">
+          <form id="dispatchForm" onsubmit="event.preventDefault()" class="space-y-3.5">
             <div>
               <label class="block text-xs font-medium text-slate-300 mb-1">Order ID Baru (Otomatis)</label>
               <div class="flex items-center gap-2">
@@ -496,10 +496,13 @@
     }
 
     function calculateCarEtaSeconds(distanceKm) {
-      const SPEED_KMH = 20.0; // Sesuai permintaan: laju mobil 20 km/jam
+      // ponytail: estimasi haversine garis lurus 20km/h tidak akurat untuk rute riil, upgrade when: integrasi Maps Matrix API aktif
+      const SPEED_KMH = 20.0;
       const hours = distanceKm / SPEED_KMH;
       return Math.round(hours * 3600);
     }
+
+    const escapeHtml = str => String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
     let fleetList = [];
     let orderList = [];
@@ -681,6 +684,16 @@
       }
       updateWaLink();
     }
+    
+    function updateWaPreview() {
+      const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
+      const site = document.getElementById('dispatchSiteSelect')?.value || '...';
+      const preview = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
+      const el = document.getElementById('waPreviewText');
+      if (el) el.textContent = preview;
+    }
+
+    // Role 1: Dispatch
 
     function handleDispatchClick(event) {
       let orderId = document.getElementById('dispatchOrderId')?.value;
@@ -723,79 +736,6 @@
         updateWaLink();
         renderAll();
       }, 150);
-    }
-
-    function updateWaPreview() {
-      const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
-      const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-      const preview = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
-      const el = document.getElementById('waPreviewText');
-      if (el) el.textContent = preview;
-    }
-
-    // Role 1: Dispatch
-    // Role 1 Action: Dispatch Tiket & Kirim WA (Tahan Pop-up Blocker)
-    // Role 1 Action: Dispatch Tiket & Kirim WA (Tahan Pop-up Blocker)
-    async function handleDispatchSubmit(event) {
-      event.preventDefault();
-
-      let orderId = document.getElementById('dispatchOrderId')?.value;
-      if (!orderId || orderId === '-') {
-        orderId = generateNewOrderId();
-      }
-
-      const namaMbp = document.getElementById('dispatchMbpSelect').value;
-      let rawWa = document.getElementById('dispatchWaInput').value.replace(/\D/g, '');
-      const siteDest = document.getElementById('dispatchSiteSelect').value;
-      const prioritas = document.getElementById('dispatchPrioritySelect').value;
-      const linkMapsSite = getSiteMapsUrl(siteDest);
-
-      // Konversi awalan 08xx menjadi 628xx otomatis untuk WhatsApp
-      if (rawWa.startsWith('0')) {
-        rawWa = '62' + rawWa.substring(1);
-      }
-
-      // Validasi dengan peringatan jelas jika data belum lengkap
-      if (!rawWa) {
-        alert('Nomor WhatsApp MBP belum diisi!');
-        document.getElementById('dispatchWaInput').focus();
-        return;
-      }
-      if (!siteDest) {
-        alert('Pilih Site Destinasi terlebih dahulu!');
-        return;
-      }
-
-      // Simpan tiket sebagai penugasan aktif ke tim MBP terkait
-      const unit = fleetList.find(m => m.namaMbp === namaMbp);
-      if (unit) {
-        unit.pendingOrder = {
-          orderId,
-          siteDestinasi: siteDest,
-          linkMapsSite,
-          prioritas,
-          dispatchedAt: new Date().toISOString()
-        };
-        unit.noWa = rawWa;
-        saveAndBroadcast();
-      }
-
-      // Format Pesan WhatsApp: [Order ID: ORD-xxxx] Ada masalah di site [Site Destinasi]
-      const waText = `[Order ID: ${orderId}] Ada masalah di site ${siteDest}`;
-      const waUrl = `https://wa.me/${rawWa}?text=${encodeURIComponent(waText)}`;
-
-      // Bypass Pop-up Blocker: Gunakan elemen tautan dinamis native
-      const link = document.createElement('a');
-      link.href = waUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      // Siapkan Order ID baru untuk tiket selanjutnya
-      generateNewOrderId();
-      renderAll();
     }
 
     // Role 2: Mobile MBP Action
@@ -1058,11 +998,11 @@
         return `
           <tr class="hover:bg-slate-800/40 transition">
             <td class="py-3 px-3.5 whitespace-nowrap">
-              <div class="font-bold text-white">${unit.namaMbp}</div>
-              <div class="text-[11px] font-mono text-slate-400">+${unit.noWa}</div>
+              <div class="font-bold text-white">${escapeHtml(unit.namaMbp)}</div>
+              <div class="text-[11px] font-mono text-slate-400">+${escapeHtml(unit.noWa)}</div>
             </td>
-            <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${unit.activeOrderId}</td>
-            <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${unit.activeSite}</td>
+           <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${escapeHtml(unit.activeOrderId)}</td>
+            <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${escapeHtml(unit.activeSite)}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span data-fleet-timer="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
@@ -1086,17 +1026,17 @@
       } else {
         orderTbody.innerHTML = orderList.map(item => `
           <tr class="hover:bg-slate-800/40 transition">
-            <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${item.orderId}</td>
-            <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${item.namaMbp}</td>
-            <td class="py-3 px-3.5 text-slate-200 whitespace-nowrap">${item.siteDestinasi}</td>
+            <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${escapeHtml(item.orderId)}</td>
+            <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${escapeHtml(item.namaMbp)}</td>
+            <td class="py-3 px-3.5 text-slate-200 whitespace-nowrap">${escapeHtml(item.siteDestinasi)}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">
               <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${getPriorityBadgeClass(item.prioritas)}">${item.prioritas}</span>
             </td>
-            <td class="py-3 px-3.5 font-mono text-emerald-400 whitespace-nowrap">${item.durasiIdleSebelumOrder || '-'}</td>
-            <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${item.estimasiEta || '-'}</td>
-            <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-400' : 'text-emerald-400'}">${item.selisihOtwEta || '-'}</td>
+            <td class="py-3 px-3.5 font-mono text-emerald-400 whitespace-nowrap">${escapeHtml(item.durasiIdleSebelumOrder || '-')}</td>
+            <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${escapeHtml(item.estimasiEta || '-')}</td>
+            <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-400' : 'text-emerald-400'}">${escapeHtml(item.selisihOtwEta || '-')}</td>
             <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(item.status)}</td>
-            <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${item.totalDurasi || '-'}</td>
+            <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${escapeHtml(item.totalDurasi || '-')}</td>
           </tr>
         `).join('');
       }
@@ -1195,11 +1135,13 @@
       renderMobileView();
     }
 
+    let isSyncing = false;
     async function syncFromServer(showSpinner = false) {
-      if (!gasWebAppUrl) {
+      if (!gasWebAppUrl || isSyncing) {
         document.getElementById('lastSyncText').textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
         return;
       }
+      isSyncing = true;
       const icon = document.getElementById('syncIcon');
       if (showSpinner) icon.classList.add('animate-spin');
 
@@ -1247,6 +1189,7 @@
         console.warn('Gagal sinkronisasi data dari Apps Script:', err);
       } finally {
         if (showSpinner) icon.classList.remove('animate-spin');
+        isSyncing = false;
       }
     }
 
