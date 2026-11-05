@@ -501,6 +501,14 @@
       const hours = distanceKm / SPEED_KMH;
       return Math.round(hours * 3600);
     }
+    
+    function parseDurationSec(str) {
+      if (!str || str === '-') return 0;
+      const h = (str.match(/(\d+)h/)?.[1] || 0) * 3600;
+      const m = (str.match(/(\d+)m/)?.[1] || 0) * 60;
+      const s = (str.match(/(\d+)s/)?.[1] || 0) * 1;
+      return Number(h) + Number(m) + Number(s);
+    }
 
     const escapeHtml = str => String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
@@ -831,7 +839,7 @@
         if (order && order.tsOtw) {
           const otwMs = nowMs - new Date(order.tsOtw).getTime();
           const actualOtwSec = Math.floor(otwMs / 1000);
-          const etaSec = order.etaSeconds || 0;
+          const etaSec = order.etaSeconds || parseDurationSec(order.estimasiEta);
 
           if (etaSec > 0) {
             const diffSec = actualOtwSec - etaSec;
