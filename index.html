@@ -202,6 +202,17 @@
               </select>
             </div>
 
+            <!-- SISIPKAN BAGIAN INI KEMBALI -->
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Prioritas Tiket</label>
+              <select id="dispatchPrioritySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="Critical">🔴 Critical (Genset Down / VIP)</option>
+                <option value="High" selected>🟠 High (Low Battery)</option>
+                <option value="Medium">🟡 Medium (PLN Padam)</option>
+                <option value="Low">🟢 Low (Standby / Patrol)</option>
+              </select>
+            </div>
+
             <!-- WhatsApp Message Preview -->
             <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
               <span class="text-slate-500 uppercase font-semibold text-[10px] block">Preview Pesan WA:</span>
