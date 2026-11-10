@@ -5,34 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>MBP Command & Field Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace']
-          }
-        }
-      }
-    };
-  </script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
-    body { background-color: #090d16; color: #f1f5f9; }
-    .status-btn:active { transform: scale(0.98); }
-    .table-scroll::-webkit-scrollbar { height: 6px; }
-    .table-scroll::-webkit-scrollbar-track { background: #0b1120; }
-    .table-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-  </style>
+  <script src="js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
+
+  <!-- LAYAR LOGIN -->
+  <div id="loginScreen" class="fixed inset-0 z-[60] bg-slate-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl">
+      <div class="flex items-center gap-2.5 mb-5">
+        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shrink-0">⚡</div>
+        <div>
+          <h1 class="font-bold text-white text-sm sm:text-base leading-tight">MBP Dispatch &amp; Monitor</h1>
+          <p class="text-[11px] text-slate-400">Masuk untuk melanjutkan</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="space-y-3" autocomplete="on">
+        <div>
+          <label for="loginUsername" class="block text-xs font-medium text-slate-300 mb-1">Username</label>
+          <input id="loginUsername" name="username" type="text" autocomplete="username" required
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+        </div>
+        <div>
+          <label for="loginPassword" class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+        </div>
+        <p id="loginError" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2"></p>
+        <button id="loginSubmit" type="submit" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition">Masuk</button>
+      </form>
+
+      <div id="loginFooter" class="hidden mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400 leading-relaxed space-y-2">
+        <p id="loginNotice"></p>
+        <button id="demoLoginBtn" onclick="startDemoMode()" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700">
+          Masuk Mode Demo (tanpa server)
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- TOP NAVIGATION & ROLE SWITCHER -->
   <header class="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
     <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
-      
+
       <!-- Brand & Status -->
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/20 shrink-0">
@@ -40,7 +56,7 @@
         </div>
         <div>
           <div class="flex items-center gap-2 flex-wrap">
-            <h1 class="font-bold text-sm sm:text-lg tracking-tight text-white leading-tight">MBP Dispatch & Monitor</h1>
+            <h1 class="font-bold text-sm sm:text-lg tracking-tight text-white leading-tight">MBP Dispatch &amp; Monitor</h1>
             <span id="connectionBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap">
               Demo Lokal
             </span>
@@ -57,15 +73,29 @@
         <button onclick="toggleConfigModal()" title="Pengaturan API" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
           ⚙️ <span class="hidden sm:inline">API</span>
         </button>
+
+        <!-- Identitas pengguna aktif -->
+        <div id="userBadge" class="hidden items-center gap-2 pl-2 sm:order-3 border-l border-slate-700">
+          <div class="text-right leading-tight">
+            <p id="userName" class="text-xs font-semibold text-white">-</p>
+            <p id="userRole" class="text-[10px] font-mono text-slate-400">-</p>
+          </div>
+          <button onclick="logout()" title="Keluar" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">
+            ⏻ <span class="hidden sm:inline">Keluar</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Role Switcher Tabs -->
-      <div class="w-full sm:w-auto flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 sm:order-2">
+      <!-- Role Switcher Tabs (hanya Mode Demo) -->
+      <div id="roleSwitcher" class="hidden w-full sm:w-auto flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 sm:order-2">
         <button id="tabOmc" onclick="switchRole('omc')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
           🖥️ OMC Monitor
         </button>
         <button id="tabMbp" onclick="switchRole('mbp')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
           📱 Lapangan MBP
+        </button>
+        <button id="tabAdmin" onclick="switchRole('admin')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+          🛠 Admin
         </button>
       </div>
 
@@ -77,7 +107,13 @@
 
     <!-- ROLE 1: DASHBOARD OMC -->
     <section id="viewOmc" class="space-y-4 sm:space-y-6">
-      
+
+      <!-- Filter NOP aktif (dari query ?nop=...) -->
+      <div id="nopFilterBanner" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 flex items-center justify-between gap-2">
+        <span>Filter NOP aktif: <strong id="nopFilterValue" class="font-mono">-</strong></span>
+        <button onclick="clearNopFilter()" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[11px] font-semibold text-amber-200">Hapus Filter</button>
+      </div>
+
       <!-- KPI & STATUS PERCENTAGE STRIP -->
       <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl space-y-4">
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
@@ -108,7 +144,7 @@
 
           <div class="bg-slate-950/80 border border-amber-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
             <div class="flex items-center justify-between gap-1 mb-1">
-              <span class="text-[11px] sm:text-xs text-amber-400 uppercase font-semibold tracking-wider">Mobilisasi</span>
+              <span class="text-[11px] sm:text-xs text-amber-400 uppercase font-semibold tracking-wider">Perjalanan</span>
               <span id="kpiMovingPct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">0%</span>
             </div>
             <div class="flex items-baseline gap-1.5">
@@ -202,7 +238,6 @@
               </select>
             </div>
 
-            <!-- SISIPKAN BAGIAN INI KEMBALI -->
             <div>
               <label class="block text-xs font-medium text-slate-300 mb-1">Prioritas Tiket</label>
               <select id="dispatchPrioritySelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
@@ -285,6 +320,7 @@
                 <th class="py-3 px-3.5">Selisih OTW vs ETA</th>
                 <th class="py-3 px-3.5">Status Tiket</th>
                 <th class="py-3 px-3.5">Log Total Durasi</th>
+                <th class="py-3 px-3.5">Approval OMC</th>
               </tr>
             </thead>
             <tbody id="orderLogTableBody" class="divide-y divide-slate-800/70 text-xs sm:text-sm">
@@ -364,7 +400,7 @@
         </div>
       </div>
 
-      <!-- 4 Tombol Status Utama (1x Klik) -->
+      <!-- SATU TOMBOL DINAMIS (state-driven) -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -374,49 +410,12 @@
         </div>
 
         <div class="grid grid-cols-1 gap-2.5">
-          <!-- 1. Accept Order -->
-          <button onclick="handleMbpStatusClick('Accept Order')" id="btnStatusAccept" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3 text-left">
-              <span class="text-xl">📋</span>
-              <div>
-                <p class="font-bold text-sm sm:text-base">1. Accept Order</p>
-                <p class="text-[11px] opacity-75">Buat baris baru di Sheets & rekam durasi idle</p>
-              </div>
-            </div>
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
-          </button>
-
-          <!-- 2. OTW to Site -->
-          <button onclick="handleMbpStatusClick('OTW to Site')" id="btnStatusOtw" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3 text-left">
-              <span class="text-xl">🚚</span>
-              <div>
-                <p class="font-bold text-sm sm:text-base">2. OTW to Site</p>
-                <p class="text-[11px] opacity-75">Cek GPS posisi MBP & hitung ETA (20 km/jam)</p>
-              </div>
-            </div>
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
-          </button>
-
-          <!-- 3. Onsite -->
-          <button onclick="handleMbpStatusClick('Onsite')" id="btnStatusOnsite" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
+          <button onclick="handleMbpAction()" id="btnMbpAction" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10 flex items-center justify-between transition-all">
             <div class="flex items-center gap-3 text-left">
               <span class="text-xl">⚡</span>
               <div>
-                <p class="font-bold text-sm sm:text-base">3. Onsite</p>
-                <p class="text-[11px] opacity-75">Tiba di site & catat selisih aktual OTW vs ETA</p>
-              </div>
-            </div>
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
-          </button>
-
-          <!-- 4. Idle (Selesai Tiket & Standby) -->
-          <button onclick="handleMbpStatusClick('Idle')" id="btnStatusIdle" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all">
-            <div class="flex items-center gap-3 text-left">
-              <span class="text-xl">🟢</span>
-              <div>
-                <p class="font-bold text-sm sm:text-base">4. Idle (Tugas Selesai / Siaga)</p>
-                <p class="text-[11px] opacity-75">Tutup tiket & mulai catat waktu idle tanpa order</p>
+                <p data-btn-label class="font-bold text-sm sm:text-base">Terima &amp; OTW</p>
+                <p data-btn-hint class="text-[11px] opacity-75">Ambil tiket &amp; berangkat ke site</p>
               </div>
             </div>
             <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
@@ -424,6 +423,97 @@
         </div>
       </div>
 
+    </section>
+
+    <!-- ROLE 3: ADMIN MASTER DATA -->
+    <section id="viewAdmin" class="hidden space-y-4 sm:space-y-6">
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+          <span>🛠</span> Master Data
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">Personil OMC, Site List, dan Unit MBP. Tersimpan di localStorage browser ini.</p>
+      </div>
+
+      <!-- Form Tambah / Edit -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <h3 id="adminFormTitle" class="text-xs font-bold uppercase tracking-wider text-slate-300">Tambah Data</h3>
+          <div class="flex items-center gap-2">
+            <button onclick="adminCancelEdit()" id="adminFormCancel" class="hidden px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 border border-slate-700">Batal</button>
+            <button onclick="adminSaveRow()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">Simpan</button>
+          </div>
+        </div>
+        <div id="adminFormFields" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        <p class="text-[11px] text-slate-500 mt-3">Pilih tabel di bawah lalu tekan "Tambah" atau "Edit" pada baris yang diinginkan.</p>
+      </div>
+
+      <!-- Tabel Master Data -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Personil OMC</h3>
+            <button onclick="adminNewRow('personil')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Nama</th>
+                  <th class="py-2.5 px-3">NOP</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_personil" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Site List</h3>
+            <button onclick="adminNewRow('sites')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">Site ID</th>
+                  <th class="py-2.5 px-3">Nama Site</th>
+                  <th class="py-2.5 px-3">NOP</th>
+                  <th class="py-2.5 px-3">Lat</th>
+                  <th class="py-2.5 px-3">Lng</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_sites" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Unit MBP</h3>
+            <button onclick="adminNewRow('units')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Nama Unit</th>
+                  <th class="py-2.5 px-3">No. WA</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_units" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </section>
   </main>
 
@@ -455,830 +545,9 @@
     </div>
   </div>
 
-  <!-- APPLICATION LOGIC -->
-  <script>
-    const DEFAULT_GAS_URL = '';
-    const STORAGE_KEY_FLEET = 'mbp_fleet_state_v2';
-    const STORAGE_KEY_ORDERS = 'mbp_orders_log_v2';
-    const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
-
-    let gasWebAppUrl = localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
-    let activeRole = 'omc';
-    let selectedMobileMbp = '';
-
-    // Database Hardcoded Koordinat Site
-    const SITE_LOCATIONS = [
-      { name: 'SITE-PLM-014 (Ilir Barat)', lat: -2.9909, lng: 104.7565 },
-      { name: 'SITE-PLM-089 (Seberang Ulu)', lat: -3.0034, lng: 104.7721 },
-      { name: 'SITE-PLM-102 (Sukarami)', lat: -2.9189, lng: 104.7088 },
-      { name: 'SITE-BTA-012 (Baturaja)', lat: -4.1294, lng: 104.1751 },
-      { name: 'SITE-PBM-033 (Prabumulih)', lat: -3.4312, lng: 104.2341 },
-      { name: 'SITE-LLG-021 (Lubuklinggau)', lat: -3.2964, lng: 102.8617 }
-    ];
-
-    function getSiteMapsUrl(siteName) {
-      const site = SITE_LOCATIONS.find(s => s.name === siteName);
-      if (site) {
-        return `https://www.google.com/maps/dir/?api=1&destination=${site.lat},${site.lng}`;
-      }
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteName)}`;
-    }
-
-    function calculateHaversineKm(lat1, lon1, lat2, lon2) {
-      const R = 6371.0;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    function calculateCarEtaSeconds(distanceKm) {
-      // ponytail: estimasi haversine garis lurus 20km/h tidak akurat untuk rute riil, upgrade when: integrasi Maps Matrix API aktif
-      const SPEED_KMH = 20.0;
-      const hours = distanceKm / SPEED_KMH;
-      return Math.round(hours * 3600);
-    }
-    
-    function parseDurationSec(str) {
-      if (!str || str === '-') return 0;
-      const h = (str.match(/(\d+)h/)?.[1] || 0) * 3600;
-      const m = (str.match(/(\d+)m/)?.[1] || 0) * 60;
-      const s = (str.match(/(\d+)s/)?.[1] || 0) * 1;
-      return Number(h) + Number(m) + Number(s);
-    }
-
-    const escapeHtml = str => String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-    let fleetList = [];
-    let orderList = [];
-
-    function generateNewOrderId() {
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      const orderId = `ORD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const input = document.getElementById('dispatchOrderId');
-      if (input) input.value = orderId;
-      updateWaPreview();
-      return orderId;
-    }
-
-    function getSeedFleet() {
-      const now = Date.now();
-      const minAgo = m => new Date(now - (m * 60000)).toISOString();
-      return [
-        { namaMbp: 'MBP-01 (Tim Alpha)', noWa: '6281234567801', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(45), tsCurrentStatusStart: minAgo(45), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-        { namaMbp: 'MBP-02 (Tim Bravo)', noWa: '6281234567802', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(120), tsCurrentStatusStart: minAgo(120), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-        { namaMbp: 'MBP-03 (Tim Charlie)', noWa: '6281234567803', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(30), tsCurrentStatusStart: minAgo(30), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-        { namaMbp: 'MBP-04 (Tim Delta)', noWa: '6285175393095', status: 'Idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(15), tsCurrentStatusStart: minAgo(15), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' }
-      ];
-    }
-
-    function formatDurationMs(ms) {
-      if (!ms || ms < 0) return '00m 00s';
-      const totalSec = Math.floor(ms / 1000);
-      const h = Math.floor(totalSec / 3600);
-      const m = Math.floor((totalSec % 3600) / 60);
-      const s = totalSec % 60;
-      const pad = n => String(n).padStart(2, '0');
-      return h > 0 ? `${pad(h)}h ${pad(m)}m ${pad(s)}s` : `${pad(m)}m ${pad(s)}s`;
-    }
-
-    function formatElapsed(startIso) {
-      if (!startIso || startIso === '-') return '00h 00m 00s';
-      const startTime = new Date(startIso).getTime();
-      if (isNaN(startTime)) return '00h 00m 00s';
-      const diffMs = Math.max(0, Date.now() - startTime);
-      return formatDurationMs(diffMs);
-    }
-
-    function getStatusBadgeHtml(status) {
-      const styles = {
-        'Idle': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
-        'Accept Order': 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-        'OTW to Site': 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
-        'Onsite': 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
-        'Selesai': 'bg-slate-800 text-slate-300 border border-slate-700'
-      };
-      const dot = {
-        'Idle': 'bg-emerald-400',
-        'Accept Order': 'bg-amber-400',
-        'OTW to Site': 'bg-orange-400 animate-ping',
-        'Onsite': 'bg-sky-400 animate-pulse',
-        'Selesai': 'bg-slate-400'
-      };
-      const cls = styles[status] || styles['Idle'];
-      const dotCls = dot[status] || dot['Idle'];
-      return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${cls} whitespace-nowrap">
-        <span class="w-1.5 h-1.5 rounded-full ${dotCls} shrink-0"></span>
-        ${status}
-      </span>`;
-    }
-
-    function getPriorityBadgeClass(prio) {
-      const map = {
-        'Critical': 'bg-rose-500/20 text-rose-400 border border-rose-500/40',
-        'High': 'bg-orange-500/20 text-orange-400 border border-orange-500/40',
-        'Medium': 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
-        'Low': 'bg-slate-800 text-slate-300 border border-slate-700'
-      };
-      return map[prio] || map['Low'];
-    }
-
-    function initApp() {
-      // 1. Pasang interval timer langsung di awal
-      setInterval(tickTimers, 1000);
-
-      // 2. Load data local aman
-      try {
-        const savedFleet = localStorage.getItem(STORAGE_KEY_FLEET);
-        fleetList = savedFleet ? JSON.parse(savedFleet) : getSeedFleet();
-        if (!Array.isArray(fleetList) || fleetList.length === 0) fleetList = getSeedFleet();
-
-        const savedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
-        orderList = savedOrders ? JSON.parse(savedOrders) : [];
-        if (!Array.isArray(orderList)) orderList = [];
-      } catch (err) {
-        fleetList = getSeedFleet();
-        orderList = [];
-      }
-
-      selectedMobileMbp = fleetList[0]?.namaMbp || 'MBP-01 (Tim Alpha)';
-
-      updateConnectionBadge();
-      populateSelectDropdowns();
-      generateNewOrderId();
-      renderAll();
-
-      if (gasWebAppUrl) {
-        syncFromServer(false);
-      }
-
-      setInterval(() => {
-        if (gasWebAppUrl) syncFromServer(false);
-      }, 10000);
-    }
-
-    window.addEventListener('storage', (e) => {
-      if (e.key === STORAGE_KEY_FLEET && e.newValue) {
-        fleetList = JSON.parse(e.newValue);
-        renderAll();
-      }
-      if (e.key === STORAGE_KEY_ORDERS && e.newValue) {
-        orderList = JSON.parse(e.newValue);
-        renderAll();
-      }
-    });
-
-    function updateConnectionBadge() {
-      const badge = document.getElementById('connectionBadge');
-      if (gasWebAppUrl) {
-        badge.textContent = 'Sheets Terhubung';
-        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap';
-      } else {
-        badge.textContent = 'Demo Lokal';
-        badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap';
-      }
-    }
-
-    function populateSelectDropdowns() {
-      const omcSelect = document.getElementById('dispatchMbpSelect');
-      const mobSelect = document.getElementById('mobileMbpSelect');
-      if (!omcSelect || !mobSelect) return;
-
-      const currentOmc = omcSelect.value || fleetList[0]?.namaMbp;
-      const currentMob = selectedMobileMbp || fleetList[0]?.namaMbp;
-
-      omcSelect.innerHTML = fleetList.map(m =>
-        `<option value="${m.namaMbp}">${m.namaMbp} — [${m.status}]</option>`
-      ).join('');
-      omcSelect.value = currentOmc;
-
-      mobSelect.innerHTML = fleetList.map(m =>
-        `<option value="${m.namaMbp}">${m.namaMbp}</option>`
-      ).join('');
-      mobSelect.value = currentMob;
-
-      handleMbpDispatchChange();
-    }
-
-    function updateWaLink() {
-      const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
-      const rawWa = (document.getElementById('dispatchWaInput')?.value || '').replace(/\D/g, '');
-      let phone = rawWa;
-      if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-      
-      const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-      const waText = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
-      
-      // Update tampilan teks preview
-      const previewEl = document.getElementById('waPreviewText');
-      if (previewEl) previewEl.textContent = waText;
-
-      // Update URL href asli pada tombol
-      const btn = document.getElementById('btnKirimWa');
-      if (btn) {
-        btn.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}` : '#';
-      }
-    }
-
-    function handleMbpDispatchChange() {
-      const name = document.getElementById('dispatchMbpSelect').value;
-      const found = fleetList.find(m => m.namaMbp === name);
-      if (found) {
-        document.getElementById('dispatchWaInput').value = found.noWa || '';
-      }
-      updateWaLink();
-    }
-    
-    function updateWaPreview() {
-      const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
-      const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-      const preview = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
-      const el = document.getElementById('waPreviewText');
-      if (el) el.textContent = preview;
-    }
-
-    // Role 1: Dispatch
-
-    function handleDispatchClick(event) {
-      let orderId = document.getElementById('dispatchOrderId')?.value;
-      if (!orderId || orderId === '-') {
-        orderId = generateNewOrderId();
-      }
-
-      const namaMbp = document.getElementById('dispatchMbpSelect').value;
-      let rawWa = document.getElementById('dispatchWaInput').value.replace(/\D/g, '');
-      const siteDest = document.getElementById('dispatchSiteSelect').value;
-      const prioritas = document.getElementById('dispatchPrioritySelect').value;
-      const linkMapsSite = getSiteMapsUrl(siteDest);
-
-      if (rawWa.startsWith('0')) rawWa = '62' + rawWa.substring(1);
-
-      if (!rawWa) {
-        event.preventDefault();
-        alert('Nomor WhatsApp MBP belum diisi!');
-        document.getElementById('dispatchWaInput').focus();
-        return;
-      }
-
-      // Simpan tiket sebagai tugas pending ke tim teknisi terkait
-      const unit = fleetList.find(m => m.namaMbp === namaMbp);
-      if (unit) {
-        unit.pendingOrder = {
-          orderId,
-          siteDestinasi: siteDest,
-          linkMapsSite,
-          prioritas,
-          dispatchedAt: new Date().toISOString()
-        };
-        unit.noWa = rawWa;
-        saveAndBroadcast();
-      }
-
-      // Siapkan Order ID baru untuk tiket berikutnya
-      setTimeout(() => {
-        generateNewOrderId();
-        updateWaLink();
-        renderAll();
-      }, 150);
-    }
-
-    // Role 2: Mobile MBP Action
-    async function handleMbpStatusClick(newStatus) {
-      const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp);
-      if (!unit) return;
-
-      const nowIso = new Date().toISOString();
-      const nowMs = Date.now();
-
-      if (newStatus === 'Accept Order') {
-        let orderToAccept = unit.pendingOrder;
-        if (!orderToAccept) {
-          const autoId = `ORD-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${String(new Date().getHours()).padStart(2,'0')}${String(new Date().getMinutes()).padStart(2,'0')}`;
-          orderToAccept = {
-            orderId: autoId,
-            siteDestinasi: SITE_LOCATIONS[0].name,
-            linkMapsSite: getSiteMapsUrl(SITE_LOCATIONS[0].name),
-            prioritas: 'High'
-          };
-        }
-
-        const idleStartMs = unit.tsIdleStart ? new Date(unit.tsIdleStart).getTime() : nowMs;
-        const idleDurationMs = Math.max(0, nowMs - idleStartMs);
-        const durasiIdleStr = formatDurationMs(idleDurationMs);
-
-        const newOrderRecord = {
-          orderId: orderToAccept.orderId,
-          namaMbp: unit.namaMbp,
-          noWa: unit.noWa,
-          siteDestinasi: orderToAccept.siteDestinasi,
-          linkMapsSite: orderToAccept.linkMapsSite || getSiteMapsUrl(orderToAccept.siteDestinasi),
-          prioritas: orderToAccept.prioritas,
-          status: 'Accept Order',
-          durasiIdleSebelumOrder: durasiIdleStr,
-          estimasiEta: '-',
-          selisihOtwEta: '-',
-          etaSeconds: 0,
-          tsIdle: unit.tsIdleStart,
-          tsAccept: nowIso,
-          tsOtw: '',
-          tsOnsite: '',
-          tsSelesai: '',
-          totalDurasi: `Idle Sebelum Order: ${durasiIdleStr}`
-        };
-
-        orderList.unshift(newOrderRecord);
-
-        unit.status = 'Accept Order';
-        unit.activeOrderId = orderToAccept.orderId;
-        unit.activeSite = orderToAccept.siteDestinasi;
-        unit.activeMapsLink = orderToAccept.linkMapsSite;
-        unit.activePriority = orderToAccept.prioritas;
-        unit.activeIdleDuration = durasiIdleStr;
-        unit.estimasiEta = '-';
-        unit.selisihOtwEta = '-';
-        unit.tsCurrentStatusStart = nowIso;
-        unit.pendingOrder = null;
-
-        saveAndBroadcast();
-        showFeedback();
-
-        if (gasWebAppUrl) {
-          await postToGas({
-            action: 'updateStatus',
-            namaMbp: unit.namaMbp,
-            orderId: orderToAccept.orderId,
-            noWa: unit.noWa,
-            siteDestinasi: orderToAccept.siteDestinasi,
-            linkMapsSite: unit.activeMapsLink,
-            prioritas: orderToAccept.prioritas,
-            newStatus: 'Accept Order',
-            lastIdleTimestamp: unit.tsIdleStart,
-            timestamp: nowIso
-          });
-        }
-
-      } else if (newStatus === 'OTW to Site') {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => processOtwWithCoords(pos.coords.latitude, pos.coords.longitude, unit, nowIso, nowMs),
-            () => processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs),
-            { enableHighAccuracy: true, timeout: 5000 }
-          );
-        } else {
-          processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs);
-        }
-
-      } else if (newStatus === 'Onsite') {
-        const order = orderList.find(o => o.orderId === unit.activeOrderId);
-        let selisihStr = '-';
-
-        if (order && order.tsOtw) {
-          const otwMs = nowMs - new Date(order.tsOtw).getTime();
-          const actualOtwSec = Math.floor(otwMs / 1000);
-          const etaSec = order.etaSeconds || parseDurationSec(order.estimasiEta);
-
-          if (etaSec > 0) {
-            const diffSec = actualOtwSec - etaSec;
-            const absDuration = formatDurationMs(Math.abs(diffSec) * 1000);
-            if (diffSec > 0) {
-              selisihStr = `+${absDuration} (Terlambat)`;
-            } else {
-              selisihStr = `-${absDuration} (Lebih Cepat)`;
-            }
-          }
-
-          order.status = 'Onsite';
-          order.tsOnsite = nowIso;
-          order.selisihOtwEta = selisihStr;
-          order.totalDurasi += ` | OTW: ${formatDurationMs(otwMs)}`;
-        }
-
-        unit.status = 'Onsite';
-        unit.selisihOtwEta = selisihStr;
-        unit.tsCurrentStatusStart = nowIso;
-
-        saveAndBroadcast();
-        showFeedback();
-
-        if (gasWebAppUrl) {
-          await postToGas({
-            action: 'updateStatus',
-            namaMbp: unit.namaMbp,
-            orderId: unit.activeOrderId,
-            newStatus: 'Onsite',
-            selisihOtwEta: selisihStr,
-            timestamp: nowIso
-          });
-        }
-
-      } else if (newStatus === 'Idle') {
-        const finishedOrderId = unit.activeOrderId;
-        if (finishedOrderId && finishedOrderId !== '-') {
-          const order = orderList.find(o => o.orderId === finishedOrderId);
-          if (order) {
-            order.status = 'Selesai';
-            order.tsSelesai = nowIso;
-            if (order.tsOnsite) {
-              const onsiteDur = formatDurationMs(nowMs - new Date(order.tsOnsite).getTime());
-              order.totalDurasi += ` | Onsite: ${onsiteDur}`;
-            }
-          }
-        }
-
-        unit.status = 'Idle';
-        unit.activeOrderId = '-';
-        unit.activeSite = '-';
-        unit.activeMapsLink = '#';
-        unit.activePriority = 'Low';
-        unit.activeIdleDuration = '-';
-        unit.estimasiEta = '-';
-        unit.selisihOtwEta = '-';
-        unit.tsIdleStart = nowIso;
-        unit.tsCurrentStatusStart = nowIso;
-        unit.pendingOrder = null;
-
-        saveAndBroadcast();
-        showFeedback();
-
-        if (gasWebAppUrl) {
-          await postToGas({
-            action: 'updateStatus',
-            namaMbp: unit.namaMbp,
-            orderId: finishedOrderId,
-            newStatus: 'Idle',
-            timestamp: nowIso
-          });
-        }
-      }
-    }
-
-    async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
-      const siteObj = SITE_LOCATIONS.find(s => s.name === unit.activeSite) || SITE_LOCATIONS[0];
-      const distKm = calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng);
-      const etaSec = calculateCarEtaSeconds(distKm);
-      const etaStr = `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)`;
-
-      const order = orderList.find(o => o.orderId === unit.activeOrderId);
-      if (order) {
-        order.status = 'OTW to Site';
-        order.tsOtw = nowIso;
-        order.estimasiEta = etaStr;
-        order.etaSeconds = etaSec;
-        if (order.tsAccept) {
-          const acceptMs = nowMs - new Date(order.tsAccept).getTime();
-          order.totalDurasi += ` | Accept: ${formatDurationMs(acceptMs)}`;
-        }
-      }
-
-      unit.status = 'OTW to Site';
-      unit.estimasiEta = etaStr;
-      unit.tsCurrentStatusStart = nowIso;
-
-      saveAndBroadcast();
-      showFeedback();
-
-      if (gasWebAppUrl) {
-        await postToGas({
-          action: 'updateStatus',
-          namaMbp: unit.namaMbp,
-          orderId: unit.activeOrderId,
-          newStatus: 'OTW to Site',
-          estimasiEta: etaStr,
-          timestamp: nowIso
-        });
-      }
-    }
-
-    function showFeedback() {
-      const fb = document.getElementById('mobileSyncFeedback');
-      if (fb) {
-        fb.classList.remove('hidden');
-        setTimeout(() => fb.classList.add('hidden'), 2000);
-      }
-    }
-
-    function saveAndBroadcast() {
-      localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
-      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
-      populateSelectDropdowns();
-      renderAll();
-      document.getElementById('lastSyncText').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
-    }
-
-    function renderAll() {
-      renderOmcView();
-      renderMobileView();
-    }
-
-    function renderOmcView() {
-      const total = fleetList.length;
-      const idleCount = fleetList.filter(m => m.status === 'Idle').length;
-      const movingCount = fleetList.filter(m => m.status === 'Accept Order' || m.status === 'OTW to Site').length;
-      const onsiteCount = fleetList.filter(m => m.status === 'Onsite').length;
-
-      const idlePct = total > 0 ? ((idleCount / total) * 100).toFixed(0) : '0';
-      const movingPct = total > 0 ? ((movingCount / total) * 100).toFixed(0) : '0';
-      const onsitePct = total > 0 ? ((onsiteCount / total) * 100).toFixed(0) : '0';
-
-      document.getElementById('kpiTotal').textContent = total;
-      document.getElementById('kpiIdle').textContent = idleCount;
-      document.getElementById('kpiIdlePct').textContent = `${idlePct}%`;
-      document.getElementById('kpiMoving').textContent = movingCount;
-      document.getElementById('kpiMovingPct').textContent = `${movingPct}%`;
-      document.getElementById('kpiOnsite').textContent = onsiteCount;
-      document.getElementById('kpiOnsitePct').textContent = `${onsitePct}%`;
-
-      document.getElementById('barIdle').style.width = `${idlePct}%`;
-      document.getElementById('barMoving').style.width = `${movingPct}%`;
-      document.getElementById('barOnsite').style.width = `${onsitePct}%`;
-
-      document.getElementById('distLabelIdle').textContent = `${idlePct}%`;
-      document.getElementById('distLabelMoving').textContent = `${movingPct}%`;
-      document.getElementById('distLabelOnsite').textContent = `${onsitePct}%`;
-
-      const fleetTbody = document.getElementById('fleetTableBody');
-      fleetTbody.innerHTML = fleetList.map((unit, idx) => {
-        const timerStr = formatElapsed(unit.tsCurrentStatusStart);
-        return `
-          <tr class="hover:bg-slate-800/40 transition">
-            <td class="py-3 px-3.5 whitespace-nowrap">
-              <div class="font-bold text-white">${escapeHtml(unit.namaMbp)}</div>
-              <div class="text-[11px] font-mono text-slate-400">+${escapeHtml(unit.noWa)}</div>
-            </td>
-           <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${escapeHtml(unit.activeOrderId)}</td>
-            <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${escapeHtml(unit.activeSite)}</td>
-            <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
-            <td class="py-3 px-3.5 whitespace-nowrap">
-              <span data-fleet-timer="${idx}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
-                ${timerStr}
-              </span>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      document.getElementById('totalOrdersCount').textContent = orderList.length;
-      const orderTbody = document.getElementById('orderLogTableBody');
-      if (orderList.length === 0) {
-        orderTbody.innerHTML = `
-          <tr>
-            <td colspan="9" class="py-6 text-center text-slate-500 text-xs font-mono">
-              Belum ada riwayat tiket. Kirim tiket dari OMC dan klik 'Accept Order' di sisi mobile untuk membuat baris pertama.
-            </td>
-          </tr>
-        `;
-      } else {
-        orderTbody.innerHTML = orderList.map(item => `
-          <tr class="hover:bg-slate-800/40 transition">
-            <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${escapeHtml(item.orderId)}</td>
-            <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${escapeHtml(item.namaMbp)}</td>
-            <td class="py-3 px-3.5 text-slate-200 whitespace-nowrap">${escapeHtml(item.siteDestinasi)}</td>
-            <td class="py-3 px-3.5 whitespace-nowrap">
-              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${getPriorityBadgeClass(item.prioritas)}">${item.prioritas}</span>
-            </td>
-            <td class="py-3 px-3.5 font-mono text-emerald-400 whitespace-nowrap">${escapeHtml(item.durasiIdleSebelumOrder || '-')}</td>
-            <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${escapeHtml(item.estimasiEta || '-')}</td>
-            <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-400' : 'text-emerald-400'}">${escapeHtml(item.selisihOtwEta || '-')}</td>
-            <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(item.status)}</td>
-            <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${escapeHtml(item.totalDurasi || '-')}</td>
-          </tr>
-        `).join('');
-      }
-    }
-
-    function renderMobileView() {
-      const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp) || fleetList[0];
-      if (!unit) return;
-
-      const incomingBanner = document.getElementById('incomingOrderBanner');
-      const orderIdEl = document.getElementById('mobileOrderId');
-      const siteDestEl = document.getElementById('mobileSiteDest');
-      const mapsBtn = document.getElementById('mobileMapsBtn');
-      const prioBadge = document.getElementById('mobilePriorityBadge');
-
-      if (unit.pendingOrder && unit.status === 'Idle') {
-        if (incomingBanner) incomingBanner.classList.remove('hidden');
-        if (orderIdEl) orderIdEl.textContent = `${unit.pendingOrder.orderId} (Menunggu Accept)`;
-        if (siteDestEl) siteDestEl.textContent = unit.pendingOrder.siteDestinasi;
-        if (mapsBtn) mapsBtn.href = unit.pendingOrder.linkMapsSite || getSiteMapsUrl(unit.pendingOrder.siteDestinasi);
-        if (prioBadge) {
-          prioBadge.textContent = unit.pendingOrder.prioritas;
-          prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.pendingOrder.prioritas)}`;
-        }
-      } else {
-        if (incomingBanner) incomingBanner.classList.add('hidden');
-        if (orderIdEl) orderIdEl.textContent = unit.activeOrderId;
-        if (siteDestEl) siteDestEl.textContent = unit.activeSite;
-        if (mapsBtn) mapsBtn.href = unit.activeMapsLink || getSiteMapsUrl(unit.activeSite);
-        if (prioBadge) {
-          prioBadge.textContent = unit.activePriority;
-          prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.activePriority)}`;
-        }
-      }
-
-      const idlePrevEl = document.getElementById('mobileIdlePrevDuration');
-      if (idlePrevEl) idlePrevEl.textContent = unit.activeIdleDuration || '-';
-
-      const etaValEl = document.getElementById('mobileEtaVal');
-      if (etaValEl) etaValEl.textContent = unit.estimasiEta || '-';
-
-      const diffEl = document.getElementById('mobileDiffVal');
-      if (diffEl) {
-        diffEl.textContent = unit.selisihOtwEta || '-';
-        diffEl.className = unit.selisihOtwEta && unit.selisihOtwEta.includes('Terlambat')
-          ? 'font-bold mt-0.5 text-rose-400'
-          : 'font-bold mt-0.5 text-emerald-400';
-      }
-
-      const badgeEl = document.getElementById('mobileCurrentStatusBadge');
-      if (badgeEl) badgeEl.innerHTML = getStatusBadgeHtml(unit.status);
-
-      const liveTimerEl = document.getElementById('mobileLiveTimer');
-      if (liveTimerEl) liveTimerEl.textContent = formatElapsed(unit.tsCurrentStatusStart);
-
-      const timerTitleEl = document.getElementById('timerTitle');
-      if (timerTitleEl) timerTitleEl.textContent = unit.status === 'Idle' ? 'Durasi Idle (Siaga)' : 'Durasi Tugas Aktif';
-
-      // Highlight Tombol
-      const buttons = [
-        { id: 'btnStatusAccept', name: 'Accept Order', cls: 'border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10' },
-        { id: 'btnStatusOtw', name: 'OTW to Site', cls: 'border-orange-500 bg-orange-500/20 text-white shadow-lg shadow-orange-500/10' },
-        { id: 'btnStatusOnsite', name: 'Onsite', cls: 'border-sky-500 bg-sky-500/20 text-white shadow-lg shadow-sky-500/10' },
-        { id: 'btnStatusIdle', name: 'Idle', cls: 'border-emerald-500 bg-emerald-500/20 text-white shadow-lg shadow-emerald-500/10' }
-      ];
-
-      buttons.forEach(b => {
-        const el = document.getElementById(b.id);
-        if (!el) return;
-        if (unit.status === b.name) {
-          el.className = `status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all ${b.cls}`;
-        } else {
-          el.className = 'status-btn w-full py-3.5 px-4 rounded-xl border-2 border-slate-800 bg-slate-950/70 hover:border-slate-700 text-slate-300 flex items-center justify-between transition-all';
-        }
-      });
-    }
-
-    function tickTimers() {
-      const timerElements = document.querySelectorAll('[data-fleet-timer]');
-      timerElements.forEach(el => {
-        const idx = el.getAttribute('data-fleet-timer');
-        if (fleetList && fleetList[idx]) {
-          el.textContent = formatElapsed(fleetList[idx].tsCurrentStatusStart);
-        }
-      });
-
-      const currentUnit = fleetList.find(m => m.namaMbp === selectedMobileMbp);
-      if (currentUnit) {
-        const mobTimer = document.getElementById('mobileLiveTimer');
-        if (mobTimer) mobTimer.textContent = formatElapsed(currentUnit.tsCurrentStatusStart);
-      }
-    }
-
-    function handleMobileMbpSelectChange() {
-      selectedMobileMbp = document.getElementById('mobileMbpSelect').value;
-      renderMobileView();
-    }
-
-    let isSyncing = false;
-    async function syncFromServer(showSpinner = false) {
-      if (!gasWebAppUrl || isSyncing) {
-        document.getElementById('lastSyncText').textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
-        return;
-      }
-      isSyncing = true;
-      const icon = document.getElementById('syncIcon');
-      if (showSpinner) icon.classList.add('animate-spin');
-
-      try {
-        const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
-        const json = await res.json();
-        if (json.status === 'success' && Array.isArray(json.data)) {
-          const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
-          if (sheetRecords.length > 0) {
-            orderList = sheetRecords.slice().reverse();
-            localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
-
-            fleetList.forEach(unit => {
-              const latestOrder = sheetRecords.slice().reverse().find(o => o.namaMbp.trim() === unit.namaMbp.trim());
-              if (latestOrder && latestOrder.status !== 'Selesai' && latestOrder.status !== 'Idle') {
-                unit.status = latestOrder.status;
-                unit.activeOrderId = latestOrder.orderId;
-                unit.activeSite = latestOrder.siteDestinasi;
-                unit.activePriority = latestOrder.prioritas;
-                unit.estimasiEta = latestOrder.estimasiEta || '-';
-                unit.selisihOtwEta = latestOrder.selisihOtwEta || '-';
-                if (latestOrder.status === 'Accept Order') unit.tsCurrentStatusStart = latestOrder.tsAccept;
-                else if (latestOrder.status === 'OTW to Site') unit.tsCurrentStatusStart = latestOrder.tsOtw;
-                else if (latestOrder.status === 'Onsite') unit.tsCurrentStatusStart = latestOrder.tsOnsite;
-              } else {
-                unit.status = 'Idle';
-                unit.activeOrderId = '-';
-                unit.activeSite = '-';
-                unit.activePriority = 'Low';
-                unit.estimasiEta = '-';
-                unit.selisihOtwEta = '-';
-                if (latestOrder && latestOrder.tsSelesai) {
-                  unit.tsCurrentStatusStart = latestOrder.tsSelesai;
-                  unit.tsIdleStart = latestOrder.tsSelesai;
-                }
-              }
-            });
-
-            localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
-            populateSelectDropdowns();
-          }
-          renderAll();
-        }
-      } catch (err) {
-        console.warn('Gagal sinkronisasi data dari Apps Script:', err);
-      } finally {
-        if (showSpinner) icon.classList.remove('animate-spin');
-        isSyncing = false;
-      }
-    }
-
-    async function postToGas(payload) {
-      try {
-        const res = await fetch(gasWebAppUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload),
-          redirect: 'follow'
-        });
-        const json = await res.json();
-        if (json.status === 'success' && Array.isArray(json.data)) {
-          const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
-          if (sheetRecords.length > 0) {
-            orderList = sheetRecords.slice().reverse();
-            localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
-          }
-          renderAll();
-        }
-      } catch (err) {
-        console.warn('Gagal POST ke Google Apps Script:', err);
-      }
-    }
-
-    function switchRole(role) {
-      activeRole = role;
-      const viewOmc = document.getElementById('viewOmc');
-      const viewMbp = document.getElementById('viewMbp');
-      const tabOmc = document.getElementById('tabOmc');
-      const tabMbp = document.getElementById('tabMbp');
-
-      if (role === 'omc') {
-        viewOmc.classList.remove('hidden');
-        viewMbp.classList.add('hidden');
-        tabOmc.className = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
-        tabMbp.className = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
-      } else {
-        viewOmc.classList.add('hidden');
-        viewMbp.classList.remove('hidden');
-        tabMbp.className = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
-        tabOmc.className = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
-      }
-      renderAll();
-    }
-
-    function toggleConfigModal() {
-      const modal = document.getElementById('configModal');
-      const input = document.getElementById('gasUrlInput');
-      if (modal.classList.contains('hidden')) {
-        input.value = gasWebAppUrl;
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-      } else {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-      }
-    }
-
-    function saveGasUrl() {
-      gasWebAppUrl = document.getElementById('gasUrlInput').value.trim();
-      localStorage.setItem(STORAGE_KEY_URL, gasWebAppUrl);
-      updateConnectionBadge();
-      toggleConfigModal();
-      if (gasWebAppUrl) syncFromServer(true);
-    }
-
-    function resetDemoData() {
-      localStorage.removeItem(STORAGE_KEY_FLEET);
-      localStorage.removeItem(STORAGE_KEY_ORDERS);
-      fleetList = getSeedFleet();
-      orderList = [];
-      saveAndBroadcast();
-      toggleConfigModal();
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initApp);
-    } else {
-      initApp();
-    }
-  </script>
+  <script src="js/config.js"></script>
+  <script src="js/demo-users.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
