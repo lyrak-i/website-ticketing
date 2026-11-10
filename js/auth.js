@@ -1,7 +1,7 @@
 // ===================================================================
-// AUTH LOKAL (login via Web Crypto PBKDF2, tanpa server).
-// Session disimpan di localStorage (AUTH_SESSION_KEY) dengan masa berlaku.
-// apps-script/Crypto.gs adalah padanan sisi server untuk verifikasi Apps Script.
+// AUTH LOKAL & MAGIC LINK MBP
+// Login manual hanya untuk OMC & Admin.
+// Teknisi MBP masuk via Magic Link sekali pakai per-Order dari WA.
 // ===================================================================
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -44,6 +44,8 @@ function saveSession(user) {
     name: user.name,
     role: user.role,
     unit: user.unit || '',
+    orderId: user.orderId || '',
+    token: user.token || '',
     loginAt: Date.now()
   }));
 }
@@ -77,15 +79,29 @@ function applyUser(user, demo) {
   const nameEl = document.getElementById('userName');
   if (nameEl) nameEl.textContent = user.name;
   const roleEl = document.getElementById('userRole');
-  if (roleEl) roleEl.textContent = demo ? (user.role + ' (demo)') : user.role;
+  if (roleEl) roleEl.textContent = user.role === 'mbp'
+    ? `Tiket: ${user.orderId || '-'}`
+    : (demo ? (user.role + ' (demo)') : user.role);
 
+  // Role switcher HANYA tampil jika mode demo DAN bukan sesi Magic Link MBP
   const switcher = document.getElementById('roleSwitcher');
-  if (switcher) switcher.classList.toggle('hidden', !demo);
+  if (switcher) switcher.classList.toggle('hidden', !demo || user.role === 'mbp');
 
-  // Unit MBP milik user mbp langsung dipilih
+  // Kunci unit MBP untuk teknisi
+  const mobSelect = document.getElementById('mobileMbpSelect');
   if (user.role === 'mbp' && user.unit) {
-    const unit = fleetList.find(m => m.namaMbp.startsWith(user.unit));
-    if (unit) selectedMobileMbp = unit.namaMbp;
+    const unit = fleetList.find(m => m.namaMbp === user.unit || m.namaMbp.startsWith(user.unit));
+    if (unit) {
+      selectedMobileMbp = unit.namaMbp;
+      if (mobSelect) {
+        mobSelect.value = unit.namaMbp;
+        mobSelect.disabled = true;
+        mobSelect.classList.add('opacity-60', 'cursor-not-allowed');
+      }
+    }
+  } else if (mobSelect) {
+    mobSelect.disabled = false;
+    mobSelect.classList.remove('opacity-60', 'cursor-not-allowed');
   }
 
   if (typeof switchRole === 'function') {
@@ -113,6 +129,12 @@ async function handleLoginSubmit(event) {
     return;
   }
 
+  // Batasi login manual: Hanya untuk OMC & Admin
+  if (user.role === 'mbp') {
+    showLoginError('Login manual hanya untuk OMC & Admin. Teknisi MBP wajib masuk melalui tautan tugas di WhatsApp.');
+    return;
+  }
+
   let ok = false;
   try {
     ok = await verifyPassword(password, user.hash);
@@ -129,8 +151,87 @@ async function handleLoginSubmit(event) {
   applyUser(user, isDemoMode());
 }
 
+// Validasi & Login via Magic Link WA (?tkn=...&oid=...&mbp=...&site=...&prio=...)
+async function tryMagicLinkAuth() {
+  const params = new URLSearchParams(location.search);
+  const tkn = params.get('tkn');
+  const oid = params.get('oid');
+  const mbp = params.get('mbp');
+  const site = params.get('site') || '-';
+  const prio = params.get('prio') || 'High';
+
+  if (!tkn || !oid || !mbp) return false;
+
+  // Bersihkan parameter sensitif dari address bar setelah dibaca
+  const cleanUrl = location.origin + location.pathname;
+  window.history.replaceState({}, document.title, cleanUrl);
+
+  // 1. Validasi ke Google Sheets terlebih dahulu jika URL GAS terpasang
+  if (gasWebAppUrl && typeof syncFromServer === 'function') {
+    await syncFromServer(true);
+  }
+
+  // 2. Cek apakah order sudah ada di daftar order (hasil sync Sheets / lokal)
+  const existingOrder = orderList.find(o => o.orderId === oid);
+  if (existingOrder) {
+    // Jika tiket sudah dikonfirmasi Selesai oleh OMC, tolak link!
+    if (statusKey(existingOrder.status) === 'selesai') {
+      logout();
+      showLoginError(`Tautan tidak berlaku: Tiket ${oid} sudah dikonfirmasi SELESAI oleh OMC.`);
+      return true;
+    }
+    // Jika token tersimpan di order dan berbeda, tolak
+    if (existingOrder.token && existingOrder.token !== tkn) {
+      logout();
+      showLoginError('Token tautan tidak valid untuk Order ID ini.');
+      return true;
+    }
+  }
+
+  // 3. Siapkan state unit MBP agar tidak terjadi duplikasi saat teknisi klik tombol
+  const unit = fleetList.find(m => m.namaMbp === mbp || m.namaMbp.startsWith(mbp));
+  if (unit) {
+    if (!existingOrder && statusKey(unit.status) === 'idle') {
+      // Tiket belum di-Accept di Sheets -> pasang sebagai pendingOrder
+      unit.pendingOrder = {
+        orderId: oid,
+        token: tkn,
+        siteDestinasi: site,
+        linkMapsSite: typeof getSiteMapsUrl === 'function' ? getSiteMapsUrl(site) : '#',
+        prioritas: prio,
+        nop: typeof siteNopOf === 'function' ? siteNopOf(site) : '',
+        dispatchedAt: new Date().toISOString()
+      };
+    }
+    if (typeof saveAndBroadcast === 'function') saveAndBroadcast();
+  }
+
+  const mbpUser = {
+    username: `mbp_${oid}`,
+    name: mbp,
+    role: 'mbp',
+    unit: mbp,
+    orderId: oid,
+    token: tkn
+  };
+
+  saveSession(mbpUser);
+  applyUser(mbpUser, isDemoMode());
+  return true;
+}
+
+// Cek apakah sesi MBP yang sedang aktif sudah di-Approve Selesai oleh OMC
+function checkMbpSessionExpiry() {
+  if (!currentUser || currentUser.role !== 'mbp' || !currentUser.orderId) return;
+  const ord = orderList.find(o => o.orderId === currentUser.orderId);
+  if (ord && statusKey(ord.status) === 'selesai') {
+    logout();
+    showLoginError(`Tugas pada tiket ${currentUser.orderId} telah dikonfirmasi SELESAI oleh OMC. Sesi Anda otomatis ditutup.`);
+  }
+}
+
 function startDemoMode() {
-  const user = { username: 'demo', name: 'Mode Demo', role: 'omc', unit: '' };
+  const user = { username: 'demo', name: 'Mode Demo (OMC)', role: 'omc', unit: '' };
   saveSession(user);
   applyUser(user, true);
 }
@@ -157,12 +258,11 @@ function initAuth() {
   const form = document.getElementById('loginForm');
   if (form) form.addEventListener('submit', handleLoginSubmit);
 
-  // Footer demo hanya tampil bila tidak ada server Apps Script
   const footer = document.getElementById('loginFooter');
   const notice = document.getElementById('loginNotice');
   if (isDemoMode()) {
     if (footer) footer.classList.remove('hidden');
-    if (notice) notice.textContent = 'Server Apps Script belum diisi, jadi login memakai daftar user lokal di js/demo-users.js.';
+    if (notice) notice.textContent = 'Login manual khusus OMC & Admin. Teknisi MBP masuk melalui link WhatsApp.';
   }
 
   const session = readSession();
@@ -172,10 +272,19 @@ function initAuth() {
   }
 }
 
-// Terapkan role setelah app.js selesai init (fleetList sudah terisi)
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+  // Prioritaskan pengecekan Magic Link dari WA terlebih dahulu
+  const handledByLink = await tryMagicLinkAuth();
+  if (handledByLink) return;
+
   const session = readSession();
-  if (session) applyUser(session, isDemoMode());
+  if (session) {
+    if (gasWebAppUrl && typeof syncFromServer === 'function') {
+      await syncFromServer(false);
+    }
+    applyUser(session, isDemoMode());
+    checkMbpSessionExpiry();
+  }
 });
 
 if (document.readyState === 'loading') {

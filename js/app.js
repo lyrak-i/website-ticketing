@@ -363,44 +363,55 @@ function populateSelectDropdowns() {
   handleMbpDispatchChange();
 }
 
+let currentDispatchToken = '';
+
+function generateDispatchToken() {
+  const arr = new Uint8Array(6);
+  crypto.getRandomValues(arr);
+  currentDispatchToken = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  return currentDispatchToken;
+}
+
+function buildMagicLinkUrl(orderId, namaMbp, site, prio, token) {
+  const base = location.origin + location.pathname;
+  const p = new URLSearchParams({
+    tkn: token,
+    oid: orderId,
+    mbp: namaMbp,
+    site: site,
+    prio: prio
+  });
+  return `${base}?${p.toString()}`;
+}
+
 function updateWaLink() {
   const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
+  const namaMbp = document.getElementById('dispatchMbpSelect')?.value || 'MBP-01 (Tim Alpha)';
   const rawWa = (document.getElementById('dispatchWaInput')?.value || '').replace(/\D/g, '');
   let phone = rawWa;
   if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-  
+
   const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-  const waText = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
-  
-  // Update tampilan teks preview
+  const prio = document.getElementById('dispatchPrioritySelect')?.value || 'High';
+
+  if (!currentDispatchToken) generateDispatchToken();
+  const magicUrl = buildMagicLinkUrl(orderId, namaMbp, site, prio, currentDispatchToken);
+
+  const waText = `[Order ID: ${orderId}] Ada masalah di site ${site} (Prioritas: ${prio}).\n\nKlik tautan khusus ini untuk membuka tugas & update status:\n${magicUrl}`;
+
   const previewEl = document.getElementById('waPreviewText');
   if (previewEl) previewEl.textContent = waText;
 
-  // Update URL href asli pada tombol
   const btn = document.getElementById('btnKirimWa');
   if (btn) {
     btn.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}` : '#';
   }
 }
 
-function handleMbpDispatchChange() {
-  const name = document.getElementById('dispatchMbpSelect').value;
-  const found = fleetList.find(m => m.namaMbp === name);
-  if (found) {
-    document.getElementById('dispatchWaInput').value = found.noWa || '';
-  }
+function updateWaPreview() {
+  generateDispatchToken();
   updateWaLink();
 }
-
-function updateWaPreview() {
-  const orderId = document.getElementById('dispatchOrderId')?.value || 'ORD-...';
-  const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-  const preview = `[Order ID: ${orderId}] Ada masalah di site ${site}`;
-  const el = document.getElementById('waPreviewText');
-  if (el) el.textContent = preview;
-}
-
-// Role 1: Dispatch
 
 function handleDispatchClick(event) {
   let orderId = document.getElementById('dispatchOrderId')?.value;
@@ -423,11 +434,14 @@ function handleDispatchClick(event) {
     return;
   }
 
-  // Simpan tiket sebagai tugas pending ke tim teknisi terkait
+  // Pastikan link WA menggunakan token terbaru sebelum tab WA terbuka
+  updateWaLink();
+
   const unit = fleetList.find(m => m.namaMbp === namaMbp);
   if (unit) {
     unit.pendingOrder = {
       orderId,
+      token: currentDispatchToken,
       siteDestinasi: siteDest,
       linkMapsSite,
       prioritas,
@@ -438,7 +452,6 @@ function handleDispatchClick(event) {
     saveAndBroadcast();
   }
 
-  // Siapkan Order ID baru untuk tiket berikutnya
   setTimeout(() => {
     generateNewOrderId();
     updateWaLink();
@@ -478,23 +491,53 @@ async function handleMbpAction() {
 
 // Ambil tiket & langsung OTW (dari state idle)
 async function beginJob(unit) {
+  // 1. Validasi ke Google Sheets terlebih dahulu agar tidak terjadi duplikasi Order ID
+  if (gasWebAppUrl) {
+    await syncFromServer(false);
+  }
+
   const nowIso = new Date().toISOString();
   const nowMs = Date.now();
   const idleStartMs = unit.tsIdleStart ? new Date(unit.tsIdleStart).getTime() : nowMs;
 
-  // masih ada tugas sebelumnya -> tutup dulu (reset state)
-  if (statusKey(unit.status) !== 'idle') closeOrder(unit, nowIso, nowMs);
-
   const orderToAccept = unit.pendingOrder;
   if (!orderToAccept) {
-    alert('Belum ada tiket masuk. Dispatch tiket dulu dari halaman OMC.');
+    // Cek jika order sebenarnya sudah masuk dari hasil sync Sheets
+    const activeFromSheet = orderList.find(o => o.namaMbp === unit.namaMbp && statusKey(o.status) !== 'selesai');
+    if (activeFromSheet) {
+      renderAll();
+      return;
+    }
+    alert('Belum ada tiket masuk. Buka melalui link tugas WhatsApp dari OMC.');
     return;
   }
+
+  // Cek apakah Order ID ini sudah pernah tercatat di orderList / Google Sheets
+  const existingOrder = orderList.find(o => o.orderId === orderToAccept.orderId);
+  if (existingOrder) {
+    if (statusKey(existingOrder.status) === 'selesai') {
+      alert('Tiket ini sudah dikonfirmasi Selesai oleh OMC.');
+      unit.pendingOrder = null;
+      if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
+      return;
+    }
+    // Jika sudah ada di Sheets, cukup sinkronkan ke unit tanpa unshift baris baru
+    unit.status = statusKey(existingOrder.status) === 'idle' ? 'otw' : statusKey(existingOrder.status);
+    unit.activeOrderId = existingOrder.orderId;
+    unit.activeSite = existingOrder.siteDestinasi;
+    unit.activePriority = existingOrder.prioritas;
+    unit.pendingOrder = null;
+    saveAndBroadcast();
+    return;
+  }
+
+  if (statusKey(unit.status) !== 'idle') closeOrder(unit, nowIso, nowMs);
 
   const durasiIdleStr = formatDurationMs(Math.max(0, nowMs - idleStartMs));
 
   orderList.unshift({
     orderId: orderToAccept.orderId,
+    token: orderToAccept.token || '',
     namaMbp: unit.namaMbp,
     noWa: unit.noWa,
     siteDestinasi: orderToAccept.siteDestinasi,
@@ -585,6 +628,7 @@ function closeOrder(unit, nowIso, nowMs) {
   unit.tsIdleStart = nowIso;
   unit.tsCurrentStatusStart = nowIso;
   // pendingOrder sengaja tidak disentuh: tiket berikutnya harus tetap utuh
+  if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
 }
 
 // ============================================================================
@@ -951,6 +995,7 @@ function applySheetRecords(sheetRecords) {
         unit.tsIdleStart = rows[0].tsSelesai;
       }
     }
+    if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
   });
 
   localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
