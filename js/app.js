@@ -442,7 +442,7 @@ function updateWaPreview() {
   updateWaLink();
 }
 
-function handleDispatchClick(event) {
+async function handleDispatchClick(event) {
   let orderId = document.getElementById('dispatchOrderId')?.value;
   if (!orderId || orderId === '-') {
     orderId = generateNewOrderId();
@@ -483,9 +483,33 @@ function handleDispatchClick(event) {
     unit.activeSite = siteDest;
     unit.activePriority = prioritas;
     unit.estimasiEta = '-';
+    unit.selisihOtwEta = '-';
     unit.tsCurrentStatusStart = nowIso;
     unit.noWa = rawWa;
     saveAndBroadcast();
+
+    // Kirim order ke Sheets saat dispatch, supaya device lain langsung tahu
+    if (gasWebAppUrl) {
+      const idleMs = unit.tsIdleStart ? Date.now() - new Date(unit.tsIdleStart).getTime() : 0;
+      await postToGas({
+        action: 'updateStatus',
+        orderId,
+        namaMbp: unit.namaMbp,
+        noWa: rawWa,
+        siteDestinasi: siteDest,
+        linkMapsSite,
+        prioritas,
+        newStatus: STATUS_LABEL.belum_otw,
+        durasiIdleSebelumOrder: formatDurationMs(Math.max(0, idleMs)),
+        estimasiEta: '-',
+        selisihOtwEta: '-',
+        tsIdle: unit.tsIdleStart || '',
+        tsAccept: nowIso,
+        totalDurasi: 'Idle Sebelum Order: ' + formatDurationMs(Math.max(0, idleMs)),
+        lastIdleTimestamp: unit.tsIdleStart,
+        timestamp: nowIso
+      });
+    }
   }
 
   setTimeout(() => {
@@ -525,6 +549,32 @@ async function handleMbpAction() {
   }
 }
 
+// Susun payload Sheets dari order + unit, supaya semua kolom & timestamp selalu ikut.
+function buildOrderPayload(unit, order, newStatus, timestamp) {
+  const o = order || {};
+  return {
+    action: 'updateStatus',
+    orderId: o.orderId || unit.activeOrderId || '-',
+    namaMbp: unit.namaMbp,
+    noWa: unit.noWa || o.noWa || '',
+    siteDestinasi: o.siteDestinasi || unit.activeSite || '',
+    linkMapsSite: o.linkMapsSite || unit.activeMapsLink || '',
+    prioritas: o.prioritas || unit.activePriority || 'Low',
+    newStatus,
+    durasiIdleSebelumOrder: o.durasiIdleSebelumOrder || unit.activeIdleDuration || '-',
+    estimasiEta: o.estimasiEta || unit.estimasiEta || '-',
+    selisihOtwEta: o.selisihOtwEta || unit.selisihOtwEta || '-',
+    tsIdle: o.tsIdle || unit.tsIdleStart || '',
+    tsAccept: o.tsAccept || '',
+    tsOtw: o.tsOtw || '',
+    tsOnsite: o.tsOnsite || '',
+    tsSelesai: o.tsSelesai || '',
+    totalDurasi: o.totalDurasi || '',
+    lastIdleTimestamp: unit.tsIdleStart || '',
+    timestamp
+  };
+}
+
 // Ambil tiket & langsung OTW (dari state idle)
 async function beginJob(unit) {
   // 1. Validasi ke Google Sheets terlebih dahulu agar tidak terjadi duplikasi Order ID
@@ -557,13 +607,37 @@ async function beginJob(unit) {
       if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
       return;
     }
-    // Jika sudah ada di Sheets, cukup sinkronkan ke unit tanpa unshift baris baru
-    unit.status = statusKey(existingOrder.status) === 'idle' ? 'otw' : statusKey(existingOrder.status);
+    // Order sudah dibuat saat dispatch (status Belum OTW): lanjut ke OTW,
+    // perbarui baris yang sama di Sheets, jangan buat baris baru.
+    const durasiIdleStr = formatDurationMs(Math.max(0, nowMs - idleStartMs));
+
+    existingOrder.status = 'otw';
+    if (!existingOrder.durasiIdleSebelumOrder || existingOrder.durasiIdleSebelumOrder === '-') {
+      existingOrder.durasiIdleSebelumOrder = durasiIdleStr;
+    }
+    existingOrder.tsAccept = existingOrder.tsAccept || nowIso;
+    existingOrder.tsOtw = nowIso;
+    existingOrder.totalDurasi = 'Idle Sebelum Order: ' + existingOrder.durasiIdleSebelumOrder;
+
+    unit.status = 'otw';
     unit.activeOrderId = existingOrder.orderId;
     unit.activeSite = existingOrder.siteDestinasi;
+    unit.activeMapsLink = existingOrder.linkMapsSite || getSiteMapsUrl(existingOrder.siteDestinasi);
     unit.activePriority = existingOrder.prioritas;
+    unit.activeIdleDuration = existingOrder.durasiIdleSebelumOrder;
+    unit.estimasiEta = existingOrder.estimasiEta || '-';
+    unit.selisihOtwEta = existingOrder.selisihOtwEta || '-';
+    unit.tsCurrentStatusStart = nowIso;
     unit.pendingOrder = null;
+
     saveAndBroadcast();
+    showFeedback();
+
+    if (gasWebAppUrl) {
+      await postToGas(buildOrderPayload(unit, existingOrder, STATUS_LABEL.otw, nowIso));
+    }
+
+    await updateOtwEta(unit, nowIso, nowMs);
     return;
   }
 
@@ -609,18 +683,7 @@ async function beginJob(unit) {
   showFeedback();
 
   if (gasWebAppUrl) {
-    await postToGas({
-      action: 'updateStatus',
-      namaMbp: unit.namaMbp,
-      orderId: orderToAccept.orderId,
-      noWa: unit.noWa,
-      siteDestinasi: orderToAccept.siteDestinasi,
-      linkMapsSite: unit.activeMapsLink,
-      prioritas: orderToAccept.prioritas,
-      newStatus: STATUS_LABEL.otw,
-      lastIdleTimestamp: unit.tsIdleStart,
-      timestamp: nowIso
-    });
+    await postToGas(buildOrderPayload(unit, orderList.find(x => x.orderId === orderToAccept.orderId), STATUS_LABEL.otw, nowIso));
   }
 
   await updateOtwEta(unit, nowIso, nowMs);
@@ -735,13 +798,7 @@ async function applyApproval(unit, to) {
   showFeedback();
 
   if (gasWebAppUrl) {
-    await postToGas({
-      action: 'updateStatus',
-      namaMbp: unit.namaMbp,
-      orderId: orderId,
-      newStatus: STATUS_LABEL[to] || to,
-      timestamp: nowIso
-    });
+    await postToGas(buildOrderPayload(unit, order, STATUS_LABEL[to] || to, nowIso));
   }
 }
 
@@ -767,14 +824,7 @@ async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
   showFeedback();
 
   if (gasWebAppUrl) {
-    await postToGas({
-      action: 'updateStatus',
-      namaMbp: unit.namaMbp,
-      orderId: unit.activeOrderId,
-      newStatus: STATUS_LABEL.otw,
-      estimasiEta: etaStr,
-      timestamp: nowIso
-    });
+    await postToGas(buildOrderPayload(unit, order, STATUS_LABEL.otw, nowIso));
   }
 }
 
@@ -1020,30 +1070,43 @@ function applySheetRecords(sheetRecords) {
   for (const r of sheetRecords) {
     const key = (r.namaMbp || '').trim();
     if (!key) continue;
+    // Baris placeholder (orderId "-") bukan tiket aktif: jangan dianggap order unit.
+    if (r.orderId === '-') continue;
     if (!byMbp.has(key)) byMbp.set(key, []);
     byMbp.get(key).push(r);
   }
   const tsOf = o => new Date(o.tsAccept || o.tsOtw || o.tsOnsite || o.tsSelesai || 0).getTime() || 0;
 
   fleetList.forEach(unit => {
-    const localDispatch =
-      statusKey(unit.status) === 'belum_otw' && unit.pendingOrder &&
-      !orderList.some(o => o.orderId === unit.pendingOrder.orderId);
     const rows = (byMbp.get((unit.namaMbp || '').trim()) || []).sort((a, b) => tsOf(b) - tsOf(a));
     const open = rows.find(o => statusKey(o.status) !== 'selesai' && statusKey(o.status) !== 'idle');
-    if (localDispatch && !open) {
-      return;
-    }
     if (open) {
-      unit.status = statusKey(open.status);
+      const openKey = statusKey(open.status);
+      unit.status = openKey;
       unit.activeOrderId = open.orderId;
       unit.activeSite = open.siteDestinasi;
       unit.activePriority = open.prioritas;
       unit.estimasiEta = open.estimasiEta || '-';
       unit.selisihOtwEta = open.selisihOtwEta || '-';
-      const stamp = statusKey(open.status) === 'otw' ? (open.tsOtw || open.tsAccept)
+      // Status Belum OTW: timer mulai saat OMC dispatch, bukan saat accept
+      const stamp = openKey === 'otw' ? (open.tsOtw || open.tsAccept)
+        : openKey === 'belum_otw' ? (open.tsAccept || open.tsOtw)
         : open.tsOnsite;
       if (stamp) unit.tsCurrentStatusStart = stamp;
+      // Order yang dibuat saat dispatch harus tetap punya pendingOrder di sisi MBP
+      if (openKey === 'belum_otw') {
+        unit.pendingOrder = unit.pendingOrder && unit.pendingOrder.orderId === open.orderId
+          ? unit.pendingOrder
+          : {
+              orderId: open.orderId,
+              token: open.token || '',
+              siteDestinasi: open.siteDestinasi,
+              linkMapsSite: open.linkMapsSite || '#',
+              prioritas: open.prioritas,
+              nop: open.nop || '',
+              dispatchedAt: open.tsAccept || new Date().toISOString()
+            };
+      }
     } else {
       unit.status = 'idle';
       unit.activeOrderId = '-';
