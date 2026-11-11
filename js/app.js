@@ -178,13 +178,13 @@ function getStatusBadgeHtml(status) {
   const key = statusKey(status);
   const label = STATUS_LABEL[key];
   const styles = {
-    'Idle': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
-    'Belum OTW': 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
-    'OTW to Site': 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
-    'Onsite': 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
-    'Waiting Onsite': 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-    'Waiting Selesai': 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
-    'Selesai': 'bg-slate-800 text-slate-300 border border-slate-700'
+    'Idle': 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/25',
+    'Belum OTW': 'bg-rose-500/10 text-rose-600 border border-rose-500/25',
+    'OTW to Site': 'bg-orange-500/10 text-orange-700 border border-orange-500/25',
+    'Onsite': 'bg-sky-500/10 text-sky-700 border border-sky-500/25',
+    'Waiting Onsite': 'bg-amber-500/15 text-amber-700 border border-amber-500/30',
+    'Waiting Selesai': 'bg-amber-500/15 text-amber-700 border border-amber-500/30',
+    'Selesai': 'bg-surface-3 text-muted border border-line'
   };
   const dot = {
     'Idle': 'bg-emerald-400',
@@ -205,10 +205,10 @@ function getStatusBadgeHtml(status) {
 
 function getPriorityBadgeClass(prio) {
   const map = {
-    'Critical': 'bg-rose-500/20 text-rose-400 border border-rose-500/40',
-    'High': 'bg-orange-500/20 text-orange-400 border border-orange-500/40',
-    'Medium': 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
-    'Low': 'bg-slate-800 text-slate-300 border border-slate-700'
+    'Critical': 'bg-rose-500/10 text-rose-600 border border-rose-500/30',
+    'High': 'bg-orange-500/10 text-orange-700 border border-orange-500/30',
+    'Medium': 'bg-amber-500/15 text-amber-700 border border-amber-500/30',
+    'Low': 'bg-surface-3 text-muted border border-line'
   };
   return map[prio] || map['Low'];
 }
@@ -260,9 +260,9 @@ const MBP_STEP = {
 };
 
 const BTN_CLS = {
-  amber: { active: 'border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10', idle: 'border-amber-500/40 bg-slate-950/70 text-amber-300' },
-  orange: { active: 'border-orange-500 bg-orange-500/20 text-white shadow-lg shadow-orange-500/10', idle: 'border-orange-500/30 bg-slate-950/70 text-orange-300' },
-  sky: { active: 'border-sky-500 bg-sky-500/20 text-white shadow-lg shadow-sky-500/10', idle: 'border-sky-500/30 bg-slate-950/70 text-sky-300' }
+  amber: { active: 'border-amber-500 bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25', idle: 'border-amber-500/30 bg-surface-2 text-amber-700' },
+  orange: { active: 'border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25', idle: 'border-orange-500/30 bg-surface-2 text-orange-700' },
+  sky: { active: 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-600/25', idle: 'border-sky-500/30 bg-surface-2 text-sky-700' }
 };
 
 function initApp() {
@@ -307,10 +307,16 @@ function initApp() {
       await tryMagicLinkAuth();
     } else {
       const session = typeof readSession === 'function' ? readSession() : null;
-      if (session && typeof applyUser === 'function') {
+      // Sesi teknisi MBP milik halaman mbp.html; di sini langsung arahkan.
+      if (session && session.role === 'mbp') {
+        if (!/mbp\.html$/.test(location.pathname)) {
+          goToMbpPage();
+          return;
+        }
+      } else if (session && typeof applyUser === 'function') {
         applyUser(session, typeof isDemoMode === 'function' ? isDemoMode() : false);
       }
-      renderAll();
+      if (!session || session.role !== 'mbp') renderAll();
     }
     if (gasWebAppUrl) await syncFromServer(false);
   })();
@@ -335,12 +341,13 @@ window.addEventListener('storage', (e) => {
 
 function updateConnectionBadge() {
   const badge = document.getElementById('connectionBadge');
+  if (!badge) return;
   if (gasWebAppUrl) {
     badge.textContent = 'Sheets Terhubung';
-    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap';
+    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 whitespace-nowrap';
   } else {
     badge.textContent = 'Demo Lokal';
-    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap';
+    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30 whitespace-nowrap';
   }
 }
 
@@ -357,20 +364,25 @@ window.handleMbpDispatchChange = handleMbpDispatchChange;
 function populateSelectDropdowns() {
   const omcSelect = document.getElementById('dispatchMbpSelect');
   const mobSelect = document.getElementById('mobileMbpSelect');
-  if (!omcSelect || !mobSelect) return;
 
-  const currentOmc = omcSelect.value || fleetList[0]?.namaMbp;
+  const currentOmc = omcSelect?.value || fleetList[0]?.namaMbp;
   const currentMob = selectedMobileMbp || fleetList[0]?.namaMbp;
 
-  omcSelect.innerHTML = fleetList.map(m =>
-    `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)} — [${escapeHtml(STATUS_LABEL[statusKey(m.status)])}]</option>`
-  ).join('');
-  omcSelect.value = currentOmc;
+  if (omcSelect) {
+    omcSelect.innerHTML = fleetList.map(m =>
+      `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)} — [${escapeHtml(STATUS_LABEL[statusKey(m.status)])}]</option>`
+    ).join('');
+    omcSelect.value = currentOmc;
+  }
 
-  mobSelect.innerHTML = fleetList.map(m =>
-    `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)}</option>`
-  ).join('');
-  mobSelect.value = currentMob;
+  if (mobSelect) {
+    mobSelect.innerHTML = fleetList.map(m =>
+      `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)}</option>`
+    ).join('');
+    mobSelect.value = currentMob;
+  }
+
+  if (!omcSelect && !mobSelect) return;
 
   // Site List dari master data
   const siteSelect = document.getElementById('dispatchSiteSelect');
@@ -397,7 +409,10 @@ function generateDispatchToken() {
 }
 
 function buildMagicLinkUrl(orderId, namaMbp, site, prio, token) {
-  const base = location.origin + location.pathname;
+  // pathname bisa "/website-ticketing/" (Pages) atau "/index.html" (file lokal):
+  // buang segmen terakhir agar hasilnya selalu direktori + mbp.html
+  const dir = location.pathname.replace(/[^/]*$/, '');
+  const base = location.origin + dir + 'mbp.html';
   const paramsObj = {
     tkn: token,
     oid: orderId,
@@ -841,7 +856,8 @@ function saveAndBroadcast() {
   localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
   populateSelectDropdowns();
   renderAll();
-  document.getElementById('lastSyncText').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+  const syncText = document.getElementById('lastSyncText');
+  if (syncText) syncText.textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
 }
 
 function renderAll() {
@@ -850,6 +866,7 @@ function renderAll() {
 }
 
 function renderOmcView() {
+  if (!document.getElementById('viewOmc')) return;
   const total = fleetList.length;
   const idleCount = fleetList.filter(m => statusKey(m.status) === 'idle').length;
   const movingCount = fleetList.filter(m => {
@@ -895,18 +912,18 @@ function renderOmcView() {
       const displaySite = belum && pending ? pending.siteDestinasi : unit.activeSite;
       const timerStr = formatElapsed(unit.tsCurrentStatusStart);
       return `
-      <tr class="hover:bg-slate-800/40 transition">
+      <tr class="hover:bg-surface-3 transition">
         <td class="py-3 px-3.5 whitespace-nowrap">
-          <div class="font-bold text-white">${escapeHtml(unit.namaMbp)}</div>
+          <div class="font-bold text-body">${escapeHtml(unit.namaMbp)}</div>
           <div class="text-[11px] font-mono text-slate-400">+${escapeHtml(unit.noWa)}</div>
         </td>
-        <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${escapeHtml(displayOid)}</td>
-        <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${escapeHtml(displaySite)}</td>
-        <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${escapeHtml(unit.estimasiEta || '-')}</td>
+        <td class="py-3 px-3.5 font-mono text-xs text-amber-700 whitespace-nowrap">${escapeHtml(displayOid)}</td>
+        <td class="py-3 px-3.5 font-medium text-body whitespace-nowrap">${escapeHtml(displaySite)}</td>
+        <td class="py-3 px-3.5 font-mono font-semibold text-amber-700 whitespace-nowrap">${escapeHtml(unit.estimasiEta || '-')}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">${fleetApprovalCellHtml(unit)}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">
-          <span data-fleet-timer="${escapeHtml(unit.namaMbp)}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
+          <span data-fleet-timer="${escapeHtml(unit.namaMbp)}" class="font-mono font-bold text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs tabular">
             ${timerStr}
           </span>
         </td>
@@ -931,16 +948,16 @@ function renderOmcView() {
     `;
   } else {
     orderTbody.innerHTML = visibleOrders.map(item => `
-      <tr class="hover:bg-slate-800/40 transition">
-        <td class="py-3 px-3.5 font-mono font-bold text-amber-400 whitespace-nowrap">${escapeHtml(item.orderId)}</td>
-        <td class="py-3 px-3.5 font-medium text-white whitespace-nowrap">${escapeHtml(item.namaMbp)}</td>
-        <td class="py-3 px-3.5 text-slate-200 whitespace-nowrap">${escapeHtml(item.siteDestinasi)}</td>
+      <tr class="hover:bg-surface-3 transition">
+        <td class="py-3 px-3.5 font-mono font-bold text-amber-700 whitespace-nowrap">${escapeHtml(item.orderId)}</td>
+        <td class="py-3 px-3.5 font-medium text-body whitespace-nowrap">${escapeHtml(item.namaMbp)}</td>
+        <td class="py-3 px-3.5 text-body whitespace-nowrap">${escapeHtml(item.siteDestinasi)}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">
           <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${getPriorityBadgeClass(item.prioritas)}">${escapeHtml(item.prioritas)}</span>
         </td>
-        <td class="py-3 px-3.5 font-mono text-emerald-400 whitespace-nowrap">${escapeHtml(item.durasiIdleSebelumOrder || '-')}</td>
-        <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${escapeHtml(item.estimasiEta || '-')}</td>
-        <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-400' : 'text-emerald-400'}">${escapeHtml(item.selisihOtwEta || '-')}</td>
+        <td class="py-3 px-3.5 font-mono text-emerald-700 whitespace-nowrap">${escapeHtml(item.durasiIdleSebelumOrder || '-')}</td>
+        <td class="py-3 px-3.5 font-mono font-semibold text-amber-700 whitespace-nowrap">${escapeHtml(item.estimasiEta || '-')}</td>
+        <td class="py-3 px-3.5 font-mono font-semibold whitespace-nowrap ${item.selisihOtwEta && item.selisihOtwEta.includes('Terlambat') ? 'text-rose-600' : 'text-emerald-700'}">${escapeHtml(item.selisihOtwEta || '-')}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(item.status)}</td>
         <td class="py-3 px-3.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">${escapeHtml(item.totalDurasi || '-')}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">${approvalCellHtml(item)}</td>
@@ -951,16 +968,16 @@ function renderOmcView() {
 
 function approvalCellHtml(item) {
   const to = OMC_APPROVALS[item.status];
-  if (!to) return '<span class="text-slate-600 text-[11px] font-mono">-</span>';
+  if (!to) return '<span class="text-faint text-[11px] font-mono">-</span>';
   const label = to === 'onsite' ? '✔ Approve Onsite' : '✔ Approve Selesai';
   return `<button onclick="approveOrder('${escapeHtml(item.orderId)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition">${label}</button>`;
 }
 
 function fleetApprovalCellHtml(unit) {
   const oid = unit.activeOrderId;
-  if (!oid || oid === '-') return '<span class="text-slate-600 text-[11px] font-mono">-</span>';
+  if (!oid || oid === '-') return '<span class="text-faint text-[11px] font-mono">-</span>';
   const item = orderList.find(o => o.orderId === oid);
-  if (!item) return '<span class="text-slate-600 text-[11px] font-mono">-</span>';
+  if (!item) return '<span class="text-faint text-[11px] font-mono">-</span>';
   return approvalCellHtml(item);
 }
 
@@ -968,47 +985,32 @@ function renderMobileView() {
   const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp) || fleetList[0];
   if (!unit) return;
 
-  const incomingBanner = document.getElementById('incomingOrderBanner');
   const orderIdEl = document.getElementById('mobileOrderId');
   const siteDestEl = document.getElementById('mobileSiteDest');
-  const mapsBtn = document.getElementById('mobileMapsBtn');
   const prioBadge = document.getElementById('mobilePriorityBadge');
+  const unitNameEl = document.getElementById('mobileUnitName');
+  if (unitNameEl) unitNameEl.textContent = unit.namaMbp;
 
   const sk = statusKey(unit.status);
   const hasTicket = unit.pendingOrder && (sk === 'idle' || sk === 'belum_otw' || sk === 'selesai');
   if (hasTicket) {
-    if (incomingBanner) incomingBanner.classList.remove('hidden');
-    if (orderIdEl) orderIdEl.textContent = `${unit.pendingOrder.orderId} (Menunggu Diterima)`;
+    if (orderIdEl) orderIdEl.textContent = unit.pendingOrder.orderId;
     if (siteDestEl) siteDestEl.textContent = unit.pendingOrder.siteDestinasi;
-    if (mapsBtn) mapsBtn.href = unit.pendingOrder.linkMapsSite || getSiteMapsUrl(unit.pendingOrder.siteDestinasi);
     if (prioBadge) {
       prioBadge.textContent = unit.pendingOrder.prioritas;
       prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.pendingOrder.prioritas)}`;
     }
   } else {
-    if (incomingBanner) incomingBanner.classList.add('hidden');
     if (orderIdEl) orderIdEl.textContent = unit.activeOrderId;
     if (siteDestEl) siteDestEl.textContent = unit.activeSite;
-    if (mapsBtn) mapsBtn.href = unit.activeMapsLink || getSiteMapsUrl(unit.activeSite);
     if (prioBadge) {
       prioBadge.textContent = unit.activePriority;
       prioBadge.className = `px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${getPriorityBadgeClass(unit.activePriority)}`;
     }
   }
 
-  const idlePrevEl = document.getElementById('mobileIdlePrevDuration');
-  if (idlePrevEl) idlePrevEl.textContent = unit.activeIdleDuration || '-';
-
   const etaValEl = document.getElementById('mobileEtaVal');
   if (etaValEl) etaValEl.textContent = unit.estimasiEta || '-';
-
-  const diffEl = document.getElementById('mobileDiffVal');
-  if (diffEl) {
-    diffEl.textContent = unit.selisihOtwEta || '-';
-    diffEl.className = unit.selisihOtwEta && unit.selisihOtwEta.includes('Terlambat')
-      ? 'font-bold mt-0.5 text-rose-400'
-      : 'font-bold mt-0.5 text-emerald-400';
-  }
 
   const badgeEl = document.getElementById('mobileCurrentStatusBadge');
   if (badgeEl) badgeEl.innerHTML = getStatusBadgeHtml(unit.status);
@@ -1025,7 +1027,7 @@ function renderMobileView() {
   const palette = BTN_CLS[step.cls] || BTN_CLS.amber;
   const btn = document.getElementById('btnMbpAction');
   if (btn) {
-    const base = 'status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-between transition-all';
+    const base = 'status-btn w-full py-4 px-5 rounded-2xl border-2 flex items-center justify-between transition-all';
     const tone = step.disabled ? palette.idle : palette.active;
     btn.disabled = !!step.disabled;
     btn.className = `${base} ${tone}`;
@@ -1080,6 +1082,14 @@ function applySheetRecords(sheetRecords) {
   fleetList.forEach(unit => {
     const rows = (byMbp.get((unit.namaMbp || '').trim()) || []).sort((a, b) => tsOf(b) - tsOf(a));
     const open = rows.find(o => statusKey(o.status) !== 'selesai' && statusKey(o.status) !== 'idle');
+    // Order hasil dispatch OMC yang belum tercatat di Sheets: jangan ditimpa jadi idle.
+    const localDispatch =
+      statusKey(unit.status) === 'belum_otw' && unit.pendingOrder &&
+      !sheetRecords.some(o => o.orderId === unit.pendingOrder.orderId);
+    if (!open && localDispatch) {
+      if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
+      return;
+    }
     if (open) {
       const openKey = statusKey(open.status);
       unit.status = openKey;
@@ -1128,13 +1138,14 @@ function applySheetRecords(sheetRecords) {
 
 let isSyncing = false;
 async function syncFromServer(showSpinner = false) {
+  const syncText = document.getElementById('lastSyncText');
   if (!gasWebAppUrl || isSyncing) {
-    document.getElementById('lastSyncText').textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
+    if (syncText) syncText.textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
     return;
   }
   isSyncing = true;
   const icon = document.getElementById('syncIcon');
-  if (showSpinner) icon.classList.add('animate-spin');
+  if (showSpinner && icon) icon.classList.add('animate-spin');
 
   try {
     const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
@@ -1147,7 +1158,7 @@ async function syncFromServer(showSpinner = false) {
   } catch (err) {
     console.warn('Gagal sinkronisasi data dari Apps Script:', err);
   } finally {
-    if (showSpinner) icon.classList.remove('animate-spin');
+    if (showSpinner && icon) icon.classList.remove('animate-spin');
     isSyncing = false;
   }
 }
@@ -1222,11 +1233,11 @@ function renderAdminTables() {
     }
 
     tbody.innerHTML = rows.map((row, i) => `
-      <tr class="hover:bg-slate-800/40 transition">
-        ${def.fields.map(f => `<td class="py-2 px-3 text-xs whitespace-nowrap ${f.type === 'number' ? 'font-mono text-slate-300' : 'text-slate-200'}">${escapeHtml(row[f.key] ?? '-')}</td>`).join('')}
+      <tr class="hover:bg-surface-3 transition">
+        ${def.fields.map(f => `<td class="py-2 px-3 text-xs whitespace-nowrap ${f.type === 'number' ? 'font-mono text-muted' : 'text-body'}">${escapeHtml(row[f.key] ?? '-')}</td>`).join('')}
         <td class="py-2 px-3 whitespace-nowrap">
-          <button onclick="adminEditRow('${key}',${i})" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[11px] font-semibold text-white mr-1">Edit</button>
-          <button onclick="adminDeleteRow('${key}',${i})" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[11px] font-semibold text-rose-300">Hapus</button>
+          <button onclick="adminEditRow('${key}',${i})" class="px-2 py-0.5 rounded bg-surface-3 hover:bg-surface-2 text-[11px] font-semibold text-body mr-1">Edit</button>
+          <button onclick="adminDeleteRow('${key}',${i})" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[11px] font-semibold text-rose-700">Hapus</button>
         </td>
       </tr>
     `).join('');
@@ -1242,8 +1253,8 @@ function adminEditRow(table, index) {
   if (!wrap) return;
   wrap.innerHTML = def.fields.map(f => `
     <div>
-      <label class="block text-xs font-medium text-slate-300 mb-1">${escapeHtml(f.label)}</label>
-      <input data-admin-field="${escapeHtml(f.key)}" type="${f.type}" value="${escapeHtml(row[f.key] ?? '')}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+      <label class="block text-xs font-medium text-body mb-1">${escapeHtml(f.label)}</label>
+      <input data-admin-field="${escapeHtml(f.key)}" type="${f.type}" value="${escapeHtml(row[f.key] ?? '')}" class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs font-mono text-body focus:outline-none focus:border-amber-500" />
     </div>
   `).join('');
 
@@ -1261,8 +1272,8 @@ function adminNewRow(table) {
   if (!wrap) return;
   wrap.innerHTML = def.fields.map(f => `
     <div>
-      <label class="block text-xs font-medium text-slate-300 mb-1">${escapeHtml(f.label)}</label>
-      <input data-admin-field="${escapeHtml(f.key)}" type="${f.type}" value="" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+      <label class="block text-xs font-medium text-body mb-1">${escapeHtml(f.label)}</label>
+      <input data-admin-field="${escapeHtml(f.key)}" type="${f.type}" value="" class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs font-mono text-body focus:outline-none focus:border-amber-500" />
     </div>
   `).join('');
 
@@ -1351,7 +1362,19 @@ function syncFleetFromMaster() {
   });
 }
 
+function goToMbpPage() {
+  const dir = location.pathname.replace(/[^/]*$/, '');
+  location.href = location.origin + dir + 'mbp.html';
+}
+
 function switchRole(role) {
+  // Tampilan MBP pindah ke halaman terpisah (mbp.html).
+  // Kalau sudah di mbp.html, cukup set role (tak ada viewMbp di halaman itu).
+  if (role === 'mbp') {
+    activeRole = role;
+    if (!/mbp\.html$/.test(location.pathname)) goToMbpPage();
+    return;
+  }
   activeRole = role;
   const views = {
     omc: document.getElementById('viewOmc'),
@@ -1364,9 +1387,10 @@ function switchRole(role) {
     admin: document.getElementById('tabAdmin')
   };
   const onCls = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
-  const offCls = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+  const offCls = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-muted hover:text-body';
 
   Object.keys(views).forEach(k => {
+    if (!views[k] || !tabs[k]) return;
     const hide = k !== role;
     views[k].classList.toggle('hidden', hide);
     tabs[k].className = hide ? offCls : onCls;
