@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MBP Command & Field Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
+
+  <!-- LAYAR LOGIN -->
+  <div id="loginScreen" class="fixed inset-0 z-[60] bg-slate-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl">
+      <div class="flex items-center gap-2.5 mb-5">
+        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shrink-0">⚡</div>
+        <div>
+          <h1 class="font-bold text-white text-sm sm:text-base leading-tight">MBP Dispatch &amp; Monitor</h1>
+          <p class="text-[11px] text-slate-400">Masuk untuk melanjutkan</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="space-y-3" autocomplete="on">
+        <div>
+          <label for="loginUsername" class="block text-xs font-medium text-slate-300 mb-1">Username</label>
+          <input id="loginUsername" name="username" type="text" autocomplete="username" required
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+        </div>
+        <div>
+          <label for="loginPassword" class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+        </div>
+        <p id="loginError" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2"></p>
+        <button id="loginSubmit" type="submit" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition">Masuk</button>
+      </form>
+
+      <div id="loginFooter" class="hidden mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400 leading-relaxed space-y-2">
+        <p id="loginNotice"></p>
+        <button id="demoLoginBtn" onclick="startDemoMode()" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700">
+          Masuk Mode Demo (tanpa server)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP NAVIGATION & ROLE SWITCHER -->
+  <header class="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
+
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/20 shrink-0">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="font-bold text-sm sm:text-lg tracking-tight text-white leading-tight">MBP Dispatch &amp; Monitor</h1>
+            <span id="connectionBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+              Demo Lokal
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Mobile Backup Power Real-Time Tracking</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-1.5 ml-auto sm:order-3">
+        <button onclick="syncFromServer(true)" title="Sinkronisasi Data" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1 transition">
+          <span id="syncIcon">🔄</span> <span class="hidden sm:inline">Sync</span>
+        </button>
+        <button onclick="toggleConfigModal()" title="Pengaturan API" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+          ⚙️ <span class="hidden sm:inline">API</span>
+        </button>
+
+        <!-- Identitas pengguna aktif -->
+        <div id="userBadge" class="hidden items-center gap-2 pl-2 sm:order-3 border-l border-slate-700">
+          <div class="text-right leading-tight">
+            <p id="userName" class="text-xs font-semibold text-white">-</p>
+            <p id="userRole" class="text-[10px] font-mono text-slate-400">-</p>
+          </div>
+          <button onclick="logout()" title="Keluar" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">
+            ⏻ <span class="hidden sm:inline">Keluar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Role Switcher Tabs (hanya Mode Demo) -->
+      <div id="roleSwitcher" class="hidden w-full sm:w-auto flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 sm:order-2">
+        <button id="tabOmc" onclick="switchRole('omc')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
+          🖥️ OMC Monitor
+        </button>
+        <button id="tabMbp" onclick="switchRole('mbp')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+          📱 Lapangan MBP
+        </button>
+        <button id="tabAdmin" onclick="switchRole('admin')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-400 hover:text-white">
+          🛠 Admin
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+    <!-- ROLE 1: DASHBOARD OMC -->
+    <section id="viewOmc" class="space-y-4 sm:space-y-6">
+
+      <!-- Filter NOP aktif (dari query ?nop=...) -->
+      <div id="nopFilterBanner" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 flex items-center justify-between gap-2">
+        <span>Filter NOP aktif: <strong id="nopFilterValue" class="font-mono">-</strong></span>
+        <button onclick="clearNopFilter()" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[11px] font-semibold text-amber-200">Hapus Filter</button>
+      </div>
+
+      <!-- KPI & STATUS PERCENTAGE STRIP -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xl space-y-4">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+          
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[11px] sm:text-xs text-slate-400 uppercase font-semibold tracking-wider">Total Armada</span>
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 shrink-0">100%</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiTotal" class="text-xl sm:text-2xl font-bold font-mono text-white leading-none">4</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1">Armada Aktif</p>
+          </div>
+
+          <div class="bg-slate-950/80 border border-emerald-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[11px] sm:text-xs text-emerald-400 uppercase font-semibold tracking-wider">Siaga (Idle)</span>
+              <span id="kpiIdlePct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">0%</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiIdle" class="text-xl sm:text-2xl font-bold font-mono text-emerald-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1">Standby Tanpa Tiket</p>
+          </div>
+
+          <div class="bg-slate-950/80 border border-amber-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[11px] sm:text-xs text-amber-400 uppercase font-semibold tracking-wider">Perjalanan</span>
+              <span id="kpiMovingPct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">0%</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiMoving" class="text-xl sm:text-2xl font-bold font-mono text-amber-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1">Accept / OTW</p>
+          </div>
+
+          <div class="bg-slate-950/80 border border-sky-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[11px] sm:text-xs text-sky-400 uppercase font-semibold tracking-wider">Onsite</span>
+              <span id="kpiOnsitePct" class="text-[10px] sm:text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">0%</span>
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiOnsite" class="text-xl sm:text-2xl font-bold font-mono text-sky-400 leading-none">0</span>
+              <span class="text-[11px] font-mono text-slate-500">Unit</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1">Catu Daya Aktif</p>
+          </div>
+
+        </div>
+
+        <!-- Progress Bar & Legend -->
+        <div class="space-y-2 pt-2 border-t border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+            <span class="font-medium text-slate-300 text-[11px] sm:text-xs">Distribusi Armada Real-Time</span>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] font-mono">
+              <span class="inline-flex items-center gap-1 text-emerald-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Idle: <strong id="distLabelIdle">0%</strong>
+              </span>
+              <span class="inline-flex items-center gap-1 text-amber-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span> Bergerak: <strong id="distLabelMoving">0%</strong>
+              </span>
+              <span class="inline-flex items-center gap-1 text-sky-400 whitespace-nowrap">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span> Onsite: <strong id="distLabelOnsite">0%</strong>
+              </span>
+            </div>
+          </div>
+          <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800 p-0.5 gap-0.5">
+            <div id="barIdle" class="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style="width: 0%"></div>
+            <div id="barMoving" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%"></div>
+            <div id="barOnsite" class="h-full bg-sky-500 rounded-r-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DISPATCH FORM & LIVE FLEET -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
+        
+        <!-- Form Dispatcher WA -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="mb-4 pb-3 border-b border-slate-800">
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <span>📡</span> WhatsApp Dispatcher
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Assign Order ID & kirim tiket instan ke WhatsApp</p>
+          </div>
+
+          <form id="dispatchForm" onsubmit="event.preventDefault()" class="space-y-3.5">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Order ID Baru (Otomatis)</label>
+              <div class="flex items-center gap-2">
+                <input id="dispatchOrderId" type="text" readonly class="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono font-bold text-amber-400" />
+                <button type="button" onclick="generateNewOrderId()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700" title="Generate ID Baru">
+                  🎲
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Pilih Tim MBP</label>
+              <select id="dispatchMbpSelect" onchange="handleMbpDispatchChange()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Nomor WhatsApp MBP</label>
+              <input id="dispatchWaInput" type="text" required oninput="updateWaLink()" placeholder="6281234567890" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Site Destinasi</label>
+              <select id="dispatchSiteSelect" onchange="updateWaLink()" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="SITE-PLM-014 (Ilir Barat)" selected>SITE-PLM-014 (Ilir Barat)</option>
+                <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
+                <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
+                <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
+                <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
+                <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Prioritas Tiket</label>
+              <select id="dispatchPrioritySelect" onchange="updateWaLink()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="Critical">🔴 Critical (Genset Down / VIP)</option>
+                <option value="High" selected>🟠 High (Low Battery)</option>
+                <option value="Medium">🟡 Medium (PLN Padam)</option>
+                <option value="Low">🟢 Low (Standby / Patrol)</option>
+              </select>
+            </div>
+
+            <!-- WhatsApp Message Preview -->
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
+              <span class="text-slate-500 uppercase font-semibold text-[10px] block">Preview Pesan WA:</span>
+              <p id="waPreviewText" class="font-mono text-emerald-400 break-words">[Order ID: ORD-...] Ada masalah di site ...</p>
+            </div>
+
+            <!-- Tautan Link Native (Menampilkan URL saat di-hover & Kebal Pop-up Blocker) -->
+            <a id="btnKirimWa" href="#" target="_blank" rel="noopener noreferrer" onclick="handleDispatchClick(event)" class="w-full py-2.5 sm:py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition active:scale-95 text-center">
+              <span>💬</span> Kirim Tiket via WA
+            </a>
+          </form>
+        </div>
+
+        <!-- Tabel Status Armada Terkini -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                Status Terkini Teknisi MBP
+              </h2>
+              <p class="text-[11px] text-slate-400">Kondisi real-time masing-masing tim & timer durasi berjalan</p>
+            </div>
+            <span id="lastSyncText" class="text-[10px] sm:text-xs font-mono text-slate-400 shrink-0">Update: Baru saja</span>
+          </div>
+
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[580px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-3 px-3.5">Nama MBP</th>
+                  <th class="py-3 px-3.5">Order ID Aktif</th>
+                  <th class="py-3 px-3.5">Site Destinasi</th>
+                  <th class="py-3 px-3.5">Status Terkini</th>
+                  <th class="py-3 px-3.5">Timer Berjalan</th>
+                </tr>
+              </thead>
+              <tbody id="fleetTableBody" class="divide-y divide-slate-800/70 text-xs sm:text-sm">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TABEL RIWAYAT LOG SEMUA ORDER ID -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div class="p-3.5 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <span>📋</span> Log Tiket Order ID (Google Sheets)
+            </h2>
+            <p class="text-[11px] text-slate-400">Setiap order id unik tersimpan pada baris baru lengkap dengan rekaman durasi idle sebelumnya</p>
+          </div>
+          <span class="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
+            Total Tiket: <strong id="totalOrdersCount">0</strong>
+          </span>
+        </div>
+
+        <div class="overflow-x-auto table-scroll">
+          <table class="w-full text-left border-collapse min-w-[900px]">
+            <thead>
+              <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <th class="py-3 px-3.5">Order ID</th>
+                <th class="py-3 px-3.5">Nama MBP</th>
+                <th class="py-3 px-3.5">Site Destinasi</th>
+                <th class="py-3 px-3.5">Prioritas</th>
+                <th class="py-3 px-3.5">Idle Sblm Order</th>
+                <th class="py-3 px-3.5">Estimasi ETA</th>
+                <th class="py-3 px-3.5">Selisih OTW vs ETA</th>
+                <th class="py-3 px-3.5">Status Tiket</th>
+                <th class="py-3 px-3.5">Log Total Durasi</th>
+                <th class="py-3 px-3.5">Approval OMC</th>
+              </tr>
+            </thead>
+            <tbody id="orderLogTableBody" class="divide-y divide-slate-800/70 text-xs sm:text-sm">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ROLE 2: TAMPILAN MOBILE MBP (FOCUS MODE) -->
+    <section id="viewMbp" class="hidden max-w-md mx-auto space-y-4">
+      
+      <!-- Pilihan Identitas Teknisi MBP -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-2">
+          👷 Pilih Identitas Unit Anda
+        </label>
+        <select id="mobileMbpSelect" onchange="handleMobileMbpSelectChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-amber-500">
+        </select>
+      </div>
+
+      <!-- Kartu Detail Tugas Aktif -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5 relative overflow-hidden">
+        
+        <div id="incomingOrderBanner" class="hidden p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs animate-pulse">
+          ⚡ <strong>Tiket Baru Diterima dari OMC!</strong> Tekan tombol <strong>Accept Order</strong> di bawah untuk membuat baris tiket & mulai bertugas.
+        </div>
+
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Order ID Aktif</span>
+            <h3 id="mobileOrderId" class="text-base sm:text-lg font-mono font-bold text-white">-</h3>
+          </div>
+          <span id="mobilePriorityBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0">
+            Low
+          </span>
+        </div>
+
+        <!-- Site & Maps Button -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+          <div>
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">📍 Site Destinasi</span>
+            <p id="mobileSiteDest" class="text-sm sm:text-base font-bold text-white mt-0.5">-</p>
+          </div>
+          <a id="mobileMapsBtn" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-2 px-3 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            🗺️ Buka Rute Google Maps ke Site
+          </a>
+        </div>
+
+        <!-- Grid Estimasi ETA & Selisih Waktu -->
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+            <span class="text-[10px] uppercase text-slate-500 block">Estimasi ETA (20 km/j)</span>
+            <p id="mobileEtaVal" class="text-amber-400 font-bold mt-0.5">-</p>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+            <span class="text-[10px] uppercase text-slate-500 block">Selisih OTW vs ETA</span>
+            <p id="mobileDiffVal" class="font-bold mt-0.5 text-slate-400">-</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Durasi Idle Sebelum Order</span>
+            <p id="mobileIdlePrevDuration" class="text-xs font-mono text-slate-300 font-semibold mt-0.5">-</p>
+          </div>
+          <div class="text-right">
+            <span id="timerTitle" class="text-[10px] uppercase tracking-wider text-slate-400 block">Timer Berjalan</span>
+            <p id="mobileLiveTimer" class="text-lg sm:text-xl font-mono font-bold text-amber-400 mt-0.5">00h 00m 00s</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+          <span class="text-[10px] uppercase tracking-wider text-slate-400">Status Teknisi</span>
+          <div id="mobileCurrentStatusBadge"></div>
+        </div>
+      </div>
+
+      <!-- SATU TOMBOL DINAMIS (state-driven) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">
+            Update Status Lapangan (1x Klik)
+          </h4>
+          <span id="mobileSyncFeedback" class="text-xs font-mono text-emerald-400 hidden">✓ Baris Tersimpan</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-2.5">
+          <button onclick="handleMbpAction()" id="btnMbpAction" class="status-btn w-full py-3.5 px-4 rounded-xl border-2 border-amber-500 bg-amber-500/20 text-white shadow-lg shadow-amber-500/10 flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3 text-left">
+              <span class="text-xl">⚡</span>
+              <div>
+                <p data-btn-label class="font-bold text-sm sm:text-base">Terima &amp; OTW</p>
+                <p data-btn-hint class="text-[11px] opacity-75">Ambil tiket &amp; berangkat ke site</p>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/20">Set</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ROLE 3: ADMIN MASTER DATA -->
+    <section id="viewAdmin" class="hidden space-y-4 sm:space-y-6">
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+          <span>🛠</span> Master Data
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">Personil OMC, Site List, dan Unit MBP. Tersimpan di localStorage browser ini.</p>
+      </div>
+
+      <!-- Form Tambah / Edit -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <h3 id="adminFormTitle" class="text-xs font-bold uppercase tracking-wider text-slate-300">Tambah Data</h3>
+          <div class="flex items-center gap-2">
+            <button onclick="adminCancelEdit()" id="adminFormCancel" class="hidden px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 border border-slate-700">Batal</button>
+            <button onclick="adminSaveRow()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">Simpan</button>
+          </div>
+        </div>
+        <div id="adminFormFields" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        <p class="text-[11px] text-slate-500 mt-3">Pilih tabel di bawah lalu tekan "Tambah" atau "Edit" pada baris yang diinginkan.</p>
+      </div>
+
+      <!-- Tabel Master Data -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Personil OMC</h3>
+            <button onclick="adminNewRow('personil')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Nama</th>
+                  <th class="py-2.5 px-3">NOP</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_personil" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Site List</h3>
+            <button onclick="adminNewRow('sites')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">Site ID</th>
+                  <th class="py-2.5 px-3">Nama Site</th>
+                  <th class="py-2.5 px-3">NOP</th>
+                  <th class="py-2.5 px-3">Lat</th>
+                  <th class="py-2.5 px-3">Lng</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_sites" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Unit MBP</h3>
+            <button onclick="adminNewRow('units')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
+          </div>
+          <div class="overflow-x-auto table-scroll">
+            <table class="w-full text-left border-collapse min-w-[420px]">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Nama Unit</th>
+                  <th class="py-2.5 px-3">No. WA</th>
+                  <th class="py-2.5 px-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="adminTbody_units" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL KONFIGURASI GOOGLE APPS SCRIPT WEB APP URL -->
+  <div id="configModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-white text-sm sm:text-base">⚙️ Konfigurasi Google Apps Script API</h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white text-sm p-1">✕</button>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-slate-300">Web App URL (`.../exec`)</label>
+        <input id="gasUrlInput" type="text" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500" />
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Tempelkan Web App URL dari deployment Google Apps Script Anda untuk sinkronisasi 2 arah dengan Google Sheets.
+        </p>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="resetDemoData()" class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold mr-auto">
+          Reset Demo
+        </button>
+        <button onclick="toggleConfigModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold">
+          Batal
+        </button>
+        <button onclick="saveGasUrl()" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
+          Simpan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js?v=20260311"></script>
+  <script src="js/demo-users.js?v=20260311"></script>
+  <script src="js/auth.js?v=20260311"></script>
+  <script src="js/app.js?v=20260311"></script>
+</body>
+</html>
