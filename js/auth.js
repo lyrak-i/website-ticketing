@@ -211,7 +211,8 @@ async function tryMagicLinkAuth() {
     token: tkn
   };
 
-  if (unit && statusKey(unit.status) === 'idle') {
+  if (unit && (statusKey(unit.status) === 'idle' || statusKey(unit.status) === 'belum_otw')) {
+    const dispatchedAt = unit.pendingOrder?.dispatchedAt || new Date().toISOString();
     unit.pendingOrder = {
       orderId: oid,
       token: tkn,
@@ -219,8 +220,14 @@ async function tryMagicLinkAuth() {
       linkMapsSite: typeof getSiteMapsUrl === 'function' ? getSiteMapsUrl(site) : '#',
       prioritas: prio,
       nop: typeof siteNopOf === 'function' ? siteNopOf(site) : '',
-      dispatchedAt: new Date().toISOString()
+      dispatchedAt
     };
+    unit.status = 'belum_otw';
+    unit.activeOrderId = oid;
+    unit.activeSite = site;
+    unit.activePriority = prio;
+    unit.estimasiEta = '-';
+    unit.tsCurrentStatusStart = dispatchedAt;
   }
 
   saveSession(mbpUser);
@@ -239,8 +246,9 @@ async function tryMagicLinkAuth() {
       }
       // Jika tiket masih berjalan di Sheets, pastikan pendingOrder dikosongkan karena sudah aktif
       if (unit) unit.pendingOrder = null;
-    } else if (unit && statusKey(unit.status) === 'idle') {
+    } else if (unit && (statusKey(unit.status) === 'idle' || statusKey(unit.status) === 'belum_otw')) {
       // Kembalikan pendingOrder jika di Sheets belum tercatat (karena baru akan dibuat saat klik Terima & OTW)
+      const dispatchedAt = unit.pendingOrder?.dispatchedAt || new Date().toISOString();
       unit.pendingOrder = {
         orderId: oid,
         token: tkn,
@@ -248,8 +256,13 @@ async function tryMagicLinkAuth() {
         linkMapsSite: typeof getSiteMapsUrl === 'function' ? getSiteMapsUrl(site) : '#',
         prioritas: prio,
         nop: typeof siteNopOf === 'function' ? siteNopOf(site) : '',
-        dispatchedAt: new Date().toISOString()
+        dispatchedAt
       };
+      unit.status = 'belum_otw';
+      unit.activeOrderId = oid;
+      unit.activeSite = site;
+      unit.activePriority = prio;
+      unit.tsCurrentStatusStart = dispatchedAt;
     }
     if (typeof saveAndBroadcast === 'function') saveAndBroadcast();
   }

@@ -179,6 +179,7 @@ function getStatusBadgeHtml(status) {
   const label = STATUS_LABEL[key];
   const styles = {
     'Idle': 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+    'Belum OTW': 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
     'OTW to Site': 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
     'Onsite': 'bg-sky-500/15 text-sky-400 border border-sky-500/30',
     'Waiting Onsite': 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
@@ -187,6 +188,7 @@ function getStatusBadgeHtml(status) {
   };
   const dot = {
     'Idle': 'bg-emerald-400',
+    'Belum OTW': 'bg-rose-400 animate-pulse',
     'OTW to Site': 'bg-orange-400 animate-ping',
     'Onsite': 'bg-sky-400 animate-pulse',
     'Waiting Onsite': 'bg-amber-400 animate-ping',
@@ -217,6 +219,7 @@ function getPriorityBadgeClass(prio) {
 // ============================================================================
 const STATUS_LABEL = {
   idle: 'Idle',
+  belum_otw: 'Belum OTW',
   otw: 'OTW to Site',
   waiting_onsite: 'Waiting Onsite',
   onsite: 'Onsite',
@@ -231,6 +234,7 @@ const OMC_APPROVALS = {
 // label (huruf besar/legacy Sheets) -> kunci kanonik
 const STATUS_KEY = {
   'idle': 'idle',
+  'belum otw': 'belum_otw',
   'otw to site': 'otw',
   'waiting onsite': 'waiting_onsite',
   'onsite': 'onsite',
@@ -248,6 +252,7 @@ function statusKey(value) {
 // Tombol dinamis tunggal di layar MBP
 const MBP_STEP = {
   idle: { label: 'Terima & OTW', hint: 'Ambil tiket & berangkat ke site', cls: 'amber' },
+  belum_otw: { label: 'Terima & OTW', hint: 'Ambil tiket & berangkat ke site', cls: 'amber' },
   otw: { label: 'Tiba di Site', hint: 'Konfirmasi tiba di site, lalu tunggu approval OMC', cls: 'orange' },
   waiting_onsite: { label: 'Menunggu Konfirmasi OMC', hint: 'Tunggu OMC menyetujui kedatangan Anda', disabled: true, cls: 'orange' },
   onsite: { label: 'Selesaikan Pekerjaan', hint: 'Tandai pekerjaan selesai', cls: 'sky' },
@@ -297,11 +302,18 @@ function initApp() {
     if (val) val.textContent = nopFilter;
   }
 
-  renderAll();
-
-  if (gasWebAppUrl) {
-    syncFromServer(false);
-  }
+  (async () => {
+    if (typeof HAS_MAGIC_LINK !== 'undefined' && HAS_MAGIC_LINK && typeof tryMagicLinkAuth === 'function') {
+      await tryMagicLinkAuth();
+    } else {
+      const session = typeof readSession === 'function' ? readSession() : null;
+      if (session && typeof applyUser === 'function') {
+        applyUser(session, typeof isDemoMode === 'function' ? isDemoMode() : false);
+      }
+      renderAll();
+    }
+    if (gasWebAppUrl) await syncFromServer(false);
+  })();
 
   setInterval(() => {
     if (gasWebAppUrl) syncFromServer(false);
@@ -456,6 +468,7 @@ function handleDispatchClick(event) {
 
   const unit = fleetList.find(m => m.namaMbp === namaMbp);
   if (unit) {
+    const nowIso = new Date().toISOString();
     unit.pendingOrder = {
       orderId,
       token: currentDispatchToken,
@@ -463,8 +476,14 @@ function handleDispatchClick(event) {
       linkMapsSite,
       prioritas,
       nop: siteNopOf(siteDest),
-      dispatchedAt: new Date().toISOString()
+      dispatchedAt: nowIso
     };
+    unit.status = 'belum_otw';
+    unit.activeOrderId = orderId;
+    unit.activeSite = siteDest;
+    unit.activePriority = prioritas;
+    unit.estimasiEta = '-';
+    unit.tsCurrentStatusStart = nowIso;
     unit.noWa = rawWa;
     saveAndBroadcast();
   }
@@ -548,7 +567,8 @@ async function beginJob(unit) {
     return;
   }
 
-  if (statusKey(unit.status) !== 'idle') closeOrder(unit, nowIso, nowMs);
+  const st = statusKey(unit.status);
+  if (st !== 'idle' && st !== 'belum_otw') closeOrder(unit, nowIso, nowMs);
 
   const durasiIdleStr = formatDurationMs(Math.max(0, nowMs - idleStartMs));
 
@@ -782,7 +802,10 @@ function renderAll() {
 function renderOmcView() {
   const total = fleetList.length;
   const idleCount = fleetList.filter(m => statusKey(m.status) === 'idle').length;
-  const movingCount = fleetList.filter(m => statusKey(m.status) === 'otw').length;
+  const movingCount = fleetList.filter(m => {
+    const s = statusKey(m.status);
+    return s === 'otw' || s === 'belum_otw';
+  }).length;
   // waiting_* = unit sudah di site, hanya menunggu approval OMC
   const onsiteCount = fleetList.filter(m => ['onsite', 'waiting_onsite', 'waiting_selesai'].includes(statusKey(m.status))).length;
 
@@ -813,9 +836,13 @@ function renderOmcView() {
 
   const fleetTbody = document.getElementById('fleetTableBody');
   if (visibleFleet.length === 0) {
-    fleetTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500 text-xs font-mono">Tidak ada unit untuk NOP ${escapeHtml(nopFilter)}</td></tr>`;
+    fleetTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-500 text-xs font-mono">Tidak ada unit untuk NOP ${escapeHtml(nopFilter)}</td></tr>`;
   } else {
     fleetTbody.innerHTML = visibleFleet.map(unit => {
+      const pending = unit.pendingOrder;
+      const belum = statusKey(unit.status) === 'belum_otw';
+      const displayOid = belum && pending ? pending.orderId : unit.activeOrderId;
+      const displaySite = belum && pending ? pending.siteDestinasi : unit.activeSite;
       const timerStr = formatElapsed(unit.tsCurrentStatusStart);
       return `
       <tr class="hover:bg-slate-800/40 transition">
@@ -823,9 +850,11 @@ function renderOmcView() {
           <div class="font-bold text-white">${escapeHtml(unit.namaMbp)}</div>
           <div class="text-[11px] font-mono text-slate-400">+${escapeHtml(unit.noWa)}</div>
         </td>
-       <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${escapeHtml(unit.activeOrderId)}</td>
-        <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${escapeHtml(unit.activeSite)}</td>
+        <td class="py-3 px-3.5 font-mono text-xs text-amber-400 whitespace-nowrap">${escapeHtml(displayOid)}</td>
+        <td class="py-3 px-3.5 font-medium text-slate-200 whitespace-nowrap">${escapeHtml(displaySite)}</td>
+        <td class="py-3 px-3.5 font-mono font-semibold text-amber-400 whitespace-nowrap">${escapeHtml(unit.estimasiEta || '-')}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
+        <td class="py-3 px-3.5 whitespace-nowrap">${fleetApprovalCellHtml(unit)}</td>
         <td class="py-3 px-3.5 whitespace-nowrap">
           <span data-fleet-timer="${escapeHtml(unit.namaMbp)}" class="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-xs">
             ${timerStr}
@@ -877,6 +906,14 @@ function approvalCellHtml(item) {
   return `<button onclick="approveOrder('${escapeHtml(item.orderId)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition">${label}</button>`;
 }
 
+function fleetApprovalCellHtml(unit) {
+  const oid = unit.activeOrderId;
+  if (!oid || oid === '-') return '<span class="text-slate-600 text-[11px] font-mono">-</span>';
+  const item = orderList.find(o => o.orderId === oid);
+  if (!item) return '<span class="text-slate-600 text-[11px] font-mono">-</span>';
+  return approvalCellHtml(item);
+}
+
 function renderMobileView() {
   const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp) || fleetList[0];
   if (!unit) return;
@@ -887,7 +924,8 @@ function renderMobileView() {
   const mapsBtn = document.getElementById('mobileMapsBtn');
   const prioBadge = document.getElementById('mobilePriorityBadge');
 
-  const hasTicket = unit.pendingOrder && (statusKey(unit.status) === 'idle' || statusKey(unit.status) === 'selesai');
+  const sk = statusKey(unit.status);
+  const hasTicket = unit.pendingOrder && (sk === 'idle' || sk === 'belum_otw' || sk === 'selesai');
   if (hasTicket) {
     if (incomingBanner) incomingBanner.classList.remove('hidden');
     if (orderIdEl) orderIdEl.textContent = `${unit.pendingOrder.orderId} (Menunggu Diterima)`;
@@ -988,8 +1026,14 @@ function applySheetRecords(sheetRecords) {
   const tsOf = o => new Date(o.tsAccept || o.tsOtw || o.tsOnsite || o.tsSelesai || 0).getTime() || 0;
 
   fleetList.forEach(unit => {
+    const localDispatch =
+      statusKey(unit.status) === 'belum_otw' && unit.pendingOrder &&
+      !orderList.some(o => o.orderId === unit.pendingOrder.orderId);
     const rows = (byMbp.get((unit.namaMbp || '').trim()) || []).sort((a, b) => tsOf(b) - tsOf(a));
     const open = rows.find(o => statusKey(o.status) !== 'selesai' && statusKey(o.status) !== 'idle');
+    if (localDispatch && !open) {
+      return;
+    }
     if (open) {
       unit.status = statusKey(open.status);
       unit.activeOrderId = open.orderId;
