@@ -45,16 +45,29 @@ Link WhatsApp yang dikirim OMC mengarah ke `mbp.html` (lihat `buildMagicLinkUrl(
 ## Build CSS (Tailwind)
 
 Tailwind **dibuild sekali** lalu hasilnya (`css/app.css`) di-commit — deploy cukup `git push`.
-Tailwind CDN tidak dipakai lagi.
+Tailwind CDN tidak dipakai anymore.
 
 ```bash
 npm install
-npm run build:css       # sekali
-npm run watch:css       # mode watch saat develop
+npm run build          # build CSS + stamp versi aset (JALANKAN SETIAP KALI)
+npm run build:css      # hanya build CSS
+npm run watch:css      # mode watch saat develop
+npm run stamp          # hanya perbarui ?v= di halaman
 ```
 
-Jalankan ulang build **setiap kali menambah kelas Tailwind baru** di `index.html`,
-`mbp.html`, atau `js/*.js` (beberapa kelas dibangun runtime di JS).
+`npm run build` melakukan dua hal:
+1. Build `css/app.css` dari `src/input.css`.
+2. Menulis `?v=<hash isi file>` pada link aset di `index.html` & `mbp.html`
+   (`tools/stamp_assets.py`). Karena versinya dari hash isi file, **otomatis berubah
+   begitu file berubah** — tidak perlu lagi menaikkan nomor versi manual.
+   Ini yang mencegah browser memakai CSS/JS lama dari cache setelah deploy.
+
+Jalankan `npm run build` **setiap kali** kamu mengubah `index.html`, `mbp.html`,
+`js/*.js`, atau menambah kelas Tailwind baru (beberapa kelas dibangun runtime
+di dalam string template JS).
+
+> Tanpa Google Fonts: aplikasi memakai system font stack. Nol request font,
+> tidak ada FOUT, dan halaman tampil jauh lebih cepat di jaringan lambat.
 
 Node tidak wajib ada di PATH; di PC ini ada di `C:\laragon\bin\nodejs\node-v22`:
 

@@ -14,8 +14,9 @@ module.exports = {
         faint: 'rgb(var(--c-faint) / <alpha-value>)'
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace']
+        // System font stack: 0 request jaringan, tidak ada FOUT, load jauh lebih cepat.
+        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace']
       }
     }
   },
