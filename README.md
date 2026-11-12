@@ -4,48 +4,45 @@ website untuk meninjau tiket mbp
 ## Sinkronisasi Google Sheets
 
 Semua device membaca & menulis status tiket lewat satu Google Apps Script Web App.
-Backend ada di `apps-script/Code.gs` (deploy manual — tidak ikut ter-push).
+Backend ada di folder `apps-script/` (**deploy manual** — tidak otomatis dari GitHub Pages).
 
 ### Deploy backend (sekali saja)
 
-1. Buka <https://script.google.com> → **New project**
-2. Tempel isi `apps-script/Code.gs`
-3. Cek `getSpreadsheetId()` = `1TihE0UILTdwP0bUXTu7K6ukbsGGhYFBFAfopYVzBl8Q`, `getSheetName()` = `Sheet1`
-4. **Deploy → New deployment → Web app**
+1. Buka spreadsheet MBP kamu → **Extensions → Apps Script**
+2. Buat **tiga** file berisi isi repo (nama file di editor harus persis):
+   - `Code.gs` ← `apps-script/Code.gs`
+   - `Crypto.gs` ← `apps-script/Crypto.gs`
+   - `Auth.gs` ← `apps-script/Auth.gs`
+3. Pastikan tab Sheet: **`MBP_Monitoring`** (tiket) dan **`Master_Data`** (master). Backend otomatis membuat **`Auth_Users`** saat login pertama.
+4. Header tiket harus mencakup kolom **`dispatchToken`** (kolom R) — urutan lengkap di `getColumns()` dalam `Code.gs`.
+5. **Deploy → Manage deployments → Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
-5. Salin URL `/exec` → tempel ke `js/config.js` (`DEFAULT_GAS_URL`)
+6. Salin URL `/exec` → `js/config.js` (`DEFAULT_GAS_URL`). Nilai `EXPECTED_BACKEND_VERSION` di config harus sama dengan `AUTH_BACKEND_VERSION` di `Auth.gs` (saat ini **2**).
 
-> Kalau Sheet kamu punya tab selain `Sheet1`, ubah `getSheetName()`.
-> Setelah kode diubah: **Deploy → Manage deployments → Edit → Version: New version → Deploy**.
+> Setelah kode diubah: **Deploy → Manage deployments → Edit → Version: New version → Deploy**. Jika UI menampilkan **Backend perlu deploy ulang**, langkah ini belum dilakukan.
 
 ### Google Sheet: tiket + master data
 
 **Tab `Sheet1` (tiket)** — header baris 1, urutan kolom harus sama seperti di `apps-script/Code.gs` → `getColumns()`. Baris lama tidak perlu diubah.
 
-**Tab baru `MasterData`** (untuk login OMC per NOP & unit MBP):
+**Tab `Master_Data`** — baris per entitas (lihat `readMasterData()` di `Code.gs`). Isi awal bisa lewat tab **Admin** di web (login sebagai `admin`) lalu **Simpan**; hanya Admin yang boleh menulis master (sesi server).
 
-1. Di spreadsheet yang sama, buat tab bernama **`MasterData`** (nama persis).
-2. Sel **`A1`** berisi satu objek JSON:
-   ```json
-   {
-     "personil": [{"id":"PSN-01","nama":"Andi (OMC Palembang)","nop":"PLM-014"}],
-     "sites": [{"siteId":"SITE-PLM-014","nama":"SITE-PLM-014 (Ilir Barat)","nop":"PLM-014","lat":-2.99,"lng":104.75}],
-     "units": [{"id":"MBP-01","nama":"MBP-01 (Tim Alpha)","nop":"PLM-014","noWa":"6281234567801"}]
-   }
-   ```
-3. Isi pertama kali bisa dikosongkan (`{}`); setelah deploy backend baru, buka **Admin** di web lalu **Simpan** master data — JSON akan tertulis ke `A1` lewat aksi `saveMaster`.
-4. **Setiap unit MBP wajib punya field `nop`** (sama dengan NOP wilayah armada). OMC login memakai **username = ID personil huruf kecil** (`psn-01`) dan NOP mengunci filter dashboard.
+**Tab `Auth_Users`** — dibuat otomatis. Berisi hash password per username (OMC per personil + `admin`). Admin bisa **Reset password** di UI; password baru ditampilkan sekali. Setiap kali master personil disimpan, akun OMC (`psn-01`, …) disinkronkan ke tab ini.
 
-**Login OMC per NOP (frontend, tanpa ubah Sheet tiket):**
+**Login production (Apps Script aktif):**
 
-| Username | NOP (dari personil) | Password default (ganti sebelum produksi) |
+| Username | Peran | Catatan |
 |---|---|---|
-| `psn-01` | `PLM-014` | `omc2026` (hash user `omc` di `js/demo-users.js`) |
-| `psn-02` | `BTA-012` | sama |
-| `omc` | semua NOP (demo) | `omc2026` |
+| `admin` | Admin | Password default `admin2026` sampai direset |
+| `omc` | OMC demo (semua NOP) | Password default `omc2026` |
+| `psn-01`, … | OMC per NOP | Username = ID personil huruf kecil; password dari tab Auth / reset Admin |
 
-Hash password baru: `python tools/hash_password.py` lalu salin ke `js/demo-users.js` atau (nanti) kolom hash di master.
+Tanpa backend (demo lokal): login masih memakai `js/demo-users.js`.
+
+Hash manual: `python tools/hash_password.py` (format sama dengan `Crypto.gs` / `Auth.gs`).
+
+**Magic link MBP:** token di URL dicek server (`validateMagicLink`) terhadap kolom `dispatchToken` pada baris tiket.
 
 ### Urutan status satu tiket
 
@@ -81,7 +78,10 @@ npm run build          # build CSS + stamp versi aset (JALANKAN SETIAP KALI)
 npm run build:css      # hanya build CSS
 npm run watch:css      # mode watch saat develop
 npm run stamp          # hanya perbarui ?v= di halaman
+npm test               # tes format hash & status (Node built-in)
 ```
+
+Repo memakai **LF** (lihat `.gitattributes`) agar diff README/config tidak hanya churn CRLF.
 
 `npm run build` melakukan dua hal:
 1. Build `css/app.css` dari `src/input.css`.

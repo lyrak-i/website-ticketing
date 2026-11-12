@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#ffffff" />
   <title>MBP Command & Field Monitor</title>
-  <link rel="stylesheet" href="css/app.css?v=a497449125">
+  <link rel="stylesheet" href="css/app.css?v=702d6abd24">
 </head>
 <body class="min-h-screen flex flex-col bg-surface-2 selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
 
@@ -339,6 +339,33 @@
         <p class="text-xs text-muted mt-0.5">Personil OMC, Site List, dan Unit MBP. Login OMC memakai ID personil (mis. psn-01) + NOP dari tabel ini.</p>
       </div>
 
+      <div class="bg-surface border border-line rounded-2xl overflow-hidden shadow-sm">
+        <div class="p-3.5 sm:p-5 border-b border-line flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-body">Akun Login (server)</h3>
+            <p class="text-[11px] text-muted mt-0.5">Username &amp; reset password disimpan di tab <code class="font-mono text-[10px]">Auth_Users</code> pada Sheets. Password baru ditampilkan sekali setelah reset.</p>
+          </div>
+          <button type="button" onclick="loadAdminAuthUsers(true)" class="px-3 py-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-xs font-semibold text-body border border-line-strong">Muat ulang</button>
+        </div>
+        <div class="overflow-x-auto table-scroll">
+          <table class="w-full text-left border-collapse min-w-[520px]">
+            <thead>
+              <tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <th class="py-2.5 px-3">Username</th>
+                <th class="py-2.5 px-3">Nama</th>
+                <th class="py-2.5 px-3">Role</th>
+                <th class="py-2.5 px-3">NOP</th>
+                <th class="py-2.5 px-3">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="adminAuthUsersBody" class="divide-y divide-line/70">
+              <tr><td colspan="5" class="py-4 text-center text-xs text-muted">Buka tab Admin &amp; muat daftar akun.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p id="adminAuthHint" class="px-4 pb-4 text-[11px] text-faint hidden"></p>
+      </div>
+
       <div class="bg-surface border border-line rounded-2xl p-4 sm:p-5 shadow-sm flex flex-wrap items-end gap-3">
         <div class="min-w-[12rem] flex-1">
           <label for="adminNopFilter" class="block text-xs font-medium text-body mb-1">Filter tampilan per NOP</label>
@@ -482,9 +509,9 @@
     </div>
   </div>
 
-  <script defer src="js/config.js?v=b5fdd4a6fc"></script>
+  <script defer src="js/config.js?v=a08166c8d7"></script>
   <script defer src="js/demo-users.js?v=9353da1cfc"></script>
-  <script defer src="js/auth.js?v=0b2a1e09fa"></script>
-  <script defer src="js/app.js?v=338d472a5e"></script>
+  <script defer src="js/auth.js?v=c7c6a81004"></script>
+  <script defer src="js/app.js?v=9d1dc186fa"></script>
 </body>
 </html>
