@@ -8,6 +8,9 @@
 // js/config.js
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbw7HhB7Pn5-30mTzOqA4RYVAxkN6mDpQnO69Rt8rfYwWoLvcyQlWIjyApAylC1viTy7/exec';
 
+// Harus sama dengan AUTH_BACKEND_VERSION di apps-script/Auth.gs (lewat field backendVersion di GET/POST).
+const EXPECTED_BACKEND_VERSION = 2;
+
 // Kunci localStorage
 const STORAGE_KEY_FLEET = 'mbp_fleet_state_v2';
 const STORAGE_KEY_ORDERS = 'mbp_orders_log_v2';

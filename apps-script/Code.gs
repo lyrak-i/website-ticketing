@@ -2,26 +2,16 @@
  * Backend MBP Command & Field Monitor (Google Apps Script Web App)
  *
  * Deploy:
- *   1. Extensions > Apps Script >New project
- *   2. Tempel SELURUH file ini (jangan dipotong)
- *   3. Deploy > New deployment > Web app
- *      - Execute as: Me
- *      - Who has access: Anyone
- *   4. Salin URL /exec ke js/config.js (DEFAULT_GAS_URL)
- *   5. Kalau Sheet/tab berbeda, ubah getSpreadsheetId() dan getSheetName()
- *
- * Setiap perubahan kode: Deploy > Manage deployments > Edit > Version: New version > Deploy.
+ *   1. Extensions > Apps Script
+ *   2. Tempel SELURUH file ini ke Code.gs (jangan dipotong)
+ *   3. Deploy > Manage deployments > Edit > Version: New version > Deploy
  *
  * Kontrak API:
- *   GET  /exec  -> { status, data: [...], masterData?, serverTime }
- *   POST /exec  -> { action: "updateStatus", ... } | { action: "saveMaster", masterData: {...} }
- *                  -> upsert baris berdasarkan orderId, lalu balas data terbaru
- *
- * Baris dengan orderId "-" adalah baris placeholder (unit standby) dan tidak
- * pernah di-update lewat updateStatus.
+ *   GET  /exec  -> { status: "success", data: [...], masterData: {...}, serverTime }
+ *   POST /exec  -> body JSON { action: "updateStatus", ... } ATAU { action: "saveMaster", masterData: {...} }
  */
 
-// Urutan kolom harus sama dengan header sheet.
+// Urutan kolom harus sama dengan header sheet MBP_Monitoring (A1:P1).
 function getColumns() {
   return [
     'orderId',
@@ -39,15 +29,20 @@ function getColumns() {
     'tsOtw',
     'tsOnsite',
     'tsSelesai',
-    'totalDurasi'
+    'totalDurasi',
+    'nop', // Kolom Q: Pengunci NOP historis
+    'dispatchToken' // Kolom R: token magic link (hanya OMC yang tahu saat dispatch)
   ];
 }
 
 function doGet() {
-  var master = readMasterJson();
-  var out = { status: 'success', data: readRows(), serverTime: new Date().toISOString() };
-  if (master) out.masterData = master;
-  return jsonOut(out);
+  return jsonOut({
+    status: 'success',
+    data: readRows(),
+    masterData: readMasterData(),
+    serverTime: new Date().toISOString(),
+    backendVersion: typeof authBackendVersion === 'function' ? authBackendVersion() : 1
+  });
 }
 
 function doPost(e) {
@@ -58,78 +53,68 @@ function doPost(e) {
     return jsonOut({ status: 'error', message: 'Body harus JSON: ' + err.message });
   }
 
+  var action = String(payload.action || '');
+
+  if (action === 'login') return jsonOut(authHandleLogin(payload));
+  if (action === 'logout') return jsonOut(authHandleLogout(payload));
+  if (action === 'validateMagicLink') return jsonOut(authHandleValidateMagicLink(payload));
+  if (action === 'listUsers') return jsonOut(authHandleListUsers(payload));
+  if (action === 'setPassword') return jsonOut(authHandleSetPassword(payload));
+
+  var auth = authRequire(payload);
+  if (!auth.ok) {
+    return jsonOut({ status: 'error', message: auth.message });
+  }
+
   try {
-    if (payload.action === 'updateStatus') {
+    if (action === 'updateStatus') {
+      var can = authCanWriteOrder(auth.session, payload);
+      if (!can.ok) return jsonOut({ status: 'error', message: can.message });
       upsertRow(payload);
-    } else if (payload.action === 'saveMaster') {
-      saveMasterJson(payload.masterData);
+    } else if (action === 'saveMaster' && payload.masterData) {
+      if (auth.session.role !== 'admin') {
+        return jsonOut({ status: 'error', message: 'Hanya Admin yang boleh menyimpan master data.' });
+      }
+      writeMasterData(payload.masterData);
+      authSyncPersonilFromMaster(payload.masterData);
     } else {
-      return jsonOut({ status: 'error', message: 'Aksi tidak dikenal: ' + payload.action });
+      return jsonOut({ status: 'error', message: 'Aksi tidak dikenal: ' + action });
     }
   } catch (err) {
     return jsonOut({ status: 'error', message: 'Gagal menulis: ' + err.message });
   }
 
-  var master = readMasterJson();
-  var out = { status: 'success', data: readRows(), serverTime: new Date().toISOString() };
-  if (master) out.masterData = master;
-  return jsonOut(out);
+  return jsonOut({
+    status: 'success',
+    data: readRows(),
+    masterData: readMasterData(),
+    serverTime: new Date().toISOString(),
+    backendVersion: authBackendVersion()
+  });
 }
 
 // ---------------------------------------------------------------- konfigurasi
-// Nilai dikunci di dalam fungsi supaya tetap jalan walau baris deklarasi
-// terpotong saat copy-paste ke editor Apps Script.
-
-function getSpreadsheetId() {
-  return '1TihE0UILTdwP0bUXTu7K6ukbsGGhYFBFAfopYVzBl8Q';
-}
 
 function getSheetName() {
-  return 'Sheet1';
+  return 'MBP_Monitoring';
 }
 
 function getMasterSheetName() {
-  return 'MasterData';
+  return 'Master_Data';
 }
 
-// ---------------------------------------------------------------- master JSON (personil / sites / units)
-
-function getOrCreateMasterSheet() {
-  var ss = SpreadsheetApp.openById(getSpreadsheetId());
-  var name = getMasterSheetName();
-  var sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-    sheet.getRange('A1').setValue('{}');
-    sheet.getRange('A2').setNote(
-      'Satu sel JSON: { personil:[], sites:[], units:[] }. Diisi otomatis dari halaman Admin web.'
-    );
-  }
-  return sheet;
+function getSpreadsheet() {
+  // Gunakan active spreadsheet jika script terikat langsung ke Sheet,
+  // atau fallback ke openById jika dijalankan terpisah.
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+  throw new Error('Spreadsheet tidak ditemukan. Pastikan script dibuat dari menu Extensions > Apps Script di dalam Google Sheet Anda.');
 }
 
-function readMasterJson() {
-  var sheet = SpreadsheetApp.openById(getSpreadsheetId()).getSheetByName(getMasterSheetName());
-  if (!sheet) return null;
-  var raw = sheet.getRange('A1').getValue();
-  if (!raw) return null;
-  try {
-    return JSON.parse(String(raw));
-  } catch (e) {
-    return null;
-  }
-}
-
-function saveMasterJson(obj) {
-  if (!obj || typeof obj !== 'object') throw new Error('masterData wajib objek JSON');
-  var sheet = getOrCreateMasterSheet();
-  sheet.getRange('A1').setValue(JSON.stringify(obj));
-}
-
-// ---------------------------------------------------------------- baca sheet
+// ---------------------------------------------------------------- baca/tulis MBP_Monitoring
 
 function getSheet() {
-  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName(getSheetName()) || ss.getSheets()[0];
   if (!sheet) throw new Error('Sheet "' + getSheetName() + '" tidak ditemukan');
   return sheet;
@@ -162,7 +147,15 @@ function cellToString(v) {
   return String(v);
 }
 
-// ---------------------------------------------------------------- tulis sheet
+function findOrderRowById(orderId) {
+  var id = String(orderId || '').trim();
+  if (!id) return null;
+  var rows = readRows();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].orderId || '').trim() === id) return rows[i];
+  }
+  return null;
+}
 
 function upsertRow(payload) {
   var orderId = String(payload.orderId || '').trim();
@@ -235,7 +228,7 @@ function buildRow(payload, isNew) {
   // timestamp idle
   row.push(str(payload.tsIdle) || str(payload.lastIdleTimestamp) || '');
 
-  // timestamp accept: saat order dibuat (dispatch OMC)
+  // timestamp Belum OTW (dispatch OMC)
   row.push(str(payload.tsAccept) || (isNew ? now : ''));
 
   // timestamp OTW: diisi saat status jadi "OTW to Site"
@@ -249,15 +242,78 @@ function buildRow(payload, isNew) {
   // totalDurasi
   row.push(str(payload.totalDurasi) || (isNew ? 'Menunggu MBP Accept' : ''));
 
+  row.push(str(payload.nop) || '');
+  row.push(str(payload.dispatchToken) || '');
+
   return row;
 }
+
+// ---------------------------------------------------------------- baca/tulis Master_Data
+// ponytail: full-overwrite seluruh tab Master_Data setiap kali Admin klik Simpan, upgrade when: total baris master data > 1.000 baris
+
+function readMasterData() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(getMasterSheetName());
+  if (!sheet || sheet.getLastRow() < 2) return null;
+
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+  var out = { personil: [], units: [], sites: [] };
+
+  for (var i = 0; i < rows.length; i++) {
+    var kat = String(rows[i][0]).trim().toLowerCase();
+    var id = String(rows[i][1]).trim();
+    var nama = String(rows[i][2]).trim();
+    var nop = String(rows[i][3]).trim();
+    var noWa = String(rows[i][4]).trim();
+    if (!id) continue;
+
+    if (kat === 'personil') {
+      out.personil.push({ id: id, nama: nama, nop: nop });
+    } else if (kat === 'units') {
+      out.units.push({ id: id, nama: nama, nop: nop, noWa: noWa });
+    } else if (kat === 'sites') {
+      out.sites.push({
+        siteId: id,
+        nama: nama,
+        nop: nop,
+        lat: Number(rows[i][5]) || 0,
+        lng: Number(rows[i][6]) || 0
+      });
+    }
+  }
+  return out;
+}
+
+function writeMasterData(md) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(getMasterSheetName()) || ss.insertSheet(getMasterSheetName());
+  var rows = [['Kategori', 'ID', 'Nama', 'NOP', 'No. WA', 'Latitude', 'Longitude']];
+
+  (md.personil || []).forEach(function(p) {
+    if (!p || !p.id) return;
+    rows.push(['personil', str(p.id), str(p.nama), str(p.nop), '', '', '']);
+  });
+
+  (md.units || []).forEach(function(u) {
+    if (!u || !u.id) return;
+    rows.push(['units', str(u.id), str(u.nama), str(u.nop), str(u.noWa), '', '']);
+  });
+
+  (md.sites || []).forEach(function(s) {
+    if (!s || !s.siteId) return;
+    rows.push(['sites', str(s.siteId), str(s.nama), str(s.nop), '', Number(s.lat) || 0, Number(s.lng) || 0]);
+  });
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, rows.length, 7).setValues(rows);
+}
+
+// ---------------------------------------------------------------- helper & response
 
 function str(v) {
   if (v === null || v === undefined) return '';
   return String(v);
 }
-
-// ---------------------------------------------------------------- response
 
 function jsonOut(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(

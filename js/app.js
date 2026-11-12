@@ -116,17 +116,17 @@ function saveMasterData() {
   }
 }
 
-// Nop aktif sebuah order: dari Site List dulu, fallback ke nop di record order
-function getOrderNop(order) {
-  if (!order) return '';
-  if (order.nop) return order.nop; // Utamakan NOP historis yang sudah terkunci
-  const site = masterData.sites.find(s => s.siteId === (order.siteDestinasi || '').split(' ')[0] || s.nama === order.siteDestinasi);
+function siteNopOf(siteName) {
+  const key = (siteName || '').split(' ')[0];
+  const site = masterData.sites.find(s => s.siteId === key || s.nama === siteName);
   return site ? site.nop : '';
 }
 
-function siteNopOf(siteName) {
-  const site = masterData.sites.find(s => s.siteId === (siteName || '').split(' ')[0]);
-  return site ? site.nop : '';
+// Nop aktif sebuah order: historis di record, lalu lookup site.
+function getOrderNop(order) {
+  if (!order) return '';
+  if (order.nop) return order.nop;
+  return siteNopOf(order.siteDestinasi);
 }
 
 // NOP unit: master data dulu, lalu site aktif / order terakhir
@@ -217,12 +217,24 @@ function generateNewOrderId() {
 function getSeedFleet() {
   const now = Date.now();
   const minAgo = m => new Date(now - (m * 60000)).toISOString();
-  return [
-    { namaMbp: 'MBP-01 (Tim Alpha)', noWa: '6281234567801', status: 'idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(45), tsCurrentStatusStart: minAgo(45), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-    { namaMbp: 'MBP-02 (Tim Bravo)', noWa: '6281234567802', status: 'idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(120), tsCurrentStatusStart: minAgo(120), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-    { namaMbp: 'MBP-03 (Tim Charlie)', noWa: '6281234567803', status: 'idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(30), tsCurrentStatusStart: minAgo(30), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' },
-    { namaMbp: 'MBP-04 (Tim Delta)', noWa: '6285175393095', status: 'idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low', tsIdleStart: minAgo(15), tsCurrentStatusStart: minAgo(15), pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-' }
-  ];
+  const fromMaster = (typeof masterData !== 'undefined' && masterData.units?.length)
+    ? masterData.units
+    : MASTER_SEED.units;
+  return fromMaster.map(u => ({
+    id: u.id,
+    namaMbp: u.nama,
+    noWa: u.noWa || '',
+    nop: u.nop || '',
+    status: 'idle',
+    activeOrderId: '-',
+    activeSite: '-',
+    activePriority: 'Low',
+    tsIdleStart: minAgo(30),
+    tsCurrentStatusStart: minAgo(30),
+    pendingOrder: null,
+    estimasiEta: '-',
+    selisihOtwEta: '-'
+  }));
 }
 
 function formatDurationMs(ms) {
@@ -371,7 +383,8 @@ function initApp() {
     if (typeof HAS_MAGIC_LINK !== 'undefined' && HAS_MAGIC_LINK && typeof tryMagicLinkAuth === 'function') {
       await tryMagicLinkAuth();
     } else {
-      const session = typeof readSession === 'function' ? readSession() : null;
+      let session = typeof readSession === 'function' ? readSession() : null;
+      if (session && gasWebAppUrl && !session.sessionToken) session = null;
       // Sesi teknisi MBP milik halaman mbp.html; di sini langsung arahkan.
       if (session && session.role === 'mbp') {
         if (!/mbp\.html$/.test(location.pathname)) {
@@ -583,11 +596,13 @@ async function handleDispatchClick(event) {
       await postToGas({
         action: 'updateStatus',
         orderId,
+        dispatchToken: currentDispatchToken,
         namaMbp: unit.namaMbp,
         noWa: rawWa,
         siteDestinasi: siteDest,
         linkMapsSite,
         prioritas,
+        nop: siteNopOf(siteDest),
         newStatus: STATUS_LABEL.belum_otw,
         durasiIdleSebelumOrder: formatDurationMs(Math.max(0, idleMs)),
         estimasiEta: '-',
@@ -1160,7 +1175,15 @@ function applySheetRecords(sheetRecords) {
     const localDispatch =
       statusKey(unit.status) === 'belum_otw' && unit.pendingOrder &&
       !sheetRecords.some(o => o.orderId === unit.pendingOrder.orderId);
-    if (!open && localDispatch) {
+    const serverOpen = open ? rows.find(o => o.orderId === open.orderId) : null;
+    const localTs = unit.pendingOrder?.dispatchedAt ? new Date(unit.pendingOrder.dispatchedAt).getTime() : 0;
+    const serverTs = serverOpen?.tsAccept ? new Date(serverOpen.tsAccept).getTime() : 0;
+    const keepLocalDispatch = localDispatch && (!serverOpen || localTs >= serverTs);
+    if (keepLocalDispatch && open && open.orderId !== unit.pendingOrder.orderId && localTs > serverTs) {
+      if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
+      return;
+    }
+    if (!open && keepLocalDispatch) {
       if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
       return;
     }
@@ -1210,6 +1233,77 @@ function applySheetRecords(sheetRecords) {
   populateSelectDropdowns();
 }
 
+function notifySyncError(message) {
+  const syncText = document.getElementById('lastSyncText');
+  if (syncText) syncText.textContent = 'Sync gagal: ' + message;
+  const mob = document.getElementById('mobileSyncFeedback');
+  if (mob) {
+    mob.textContent = 'Gagal simpan: ' + message;
+    mob.classList.remove('hidden', 'text-emerald-700');
+    mob.classList.add('text-rose-700');
+    setTimeout(() => mob.classList.add('hidden'), 4000);
+  }
+}
+
+function noteBackendVersion(json) {
+  if (!json || typeof json.backendVersion !== 'number') return;
+  if (typeof EXPECTED_BACKEND_VERSION === 'number' && json.backendVersion < EXPECTED_BACKEND_VERSION) {
+    const badge = document.getElementById('connectionBadge');
+    if (badge) {
+      badge.textContent = 'Backend perlu deploy ulang';
+      badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 border border-rose-500/30 whitespace-nowrap';
+    }
+  }
+}
+
+function applyServerPayload(json) {
+  if (!json || json.status !== 'success' || !Array.isArray(json.data)) return false;
+  noteBackendVersion(json);
+  const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
+  if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
+  if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
+    masterData = json.masterData;
+    localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+    syncFleetFromMaster();
+    renderAdminTables();
+  }
+  renderAll();
+  const syncText = document.getElementById('lastSyncText');
+  if (syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
+  return true;
+}
+
+function getGasSessionToken() {
+  const s = typeof readSession === 'function' ? readSession() : null;
+  return s?.sessionToken || '';
+}
+
+async function gasPost(payload, options = {}) {
+  if (!gasWebAppUrl) return { status: 'error', message: 'URL Apps Script belum diatur.' };
+  const body = { ...payload };
+  if (options.auth !== false) {
+    const token = getGasSessionToken();
+    if (!token) return { status: 'error', message: 'Sesi habis. Login ulang.' };
+    body.sessionToken = token;
+  }
+  try {
+    const res = await fetch(gasWebAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      redirect: 'follow'
+    });
+    const json = await res.json();
+    if (json.status === 'success' && Array.isArray(json.data)) applyServerPayload(json);
+    else if (json.status === 'error') notifySyncError(json.message || 'Server menolak permintaan');
+    return json;
+  } catch (err) {
+    notifySyncError(err.message || String(err));
+    return { status: 'error', message: err.message || String(err) };
+  }
+}
+window.gasPost = gasPost;
+
 let isSyncing = false;
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');
@@ -1222,47 +1316,16 @@ async function syncFromServer(showSpinner = false) {
   try {
     const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
     const json = await res.json();
-    if (json.status === 'success' && Array.isArray(json.data)) {
-      const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
-      if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
-      if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
-        masterData = json.masterData;
-        localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-        syncFleetFromMaster();
-        renderAdminTables();
-      }
-      renderAll();
-    }
+    if (!applyServerPayload(json) && json?.message) notifySyncError(json.message);
   } catch (err) {
-    console.warn('Gagal sinkronisasi data dari Apps Script:', err);
+    notifySyncError(err.message || String(err));
   } finally {
     isSyncing = false;
   }
 }
 
 async function postToGas(payload) {
-  try {
-    const res = await fetch(gasWebAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      redirect: 'follow'
-    });
-    const json = await res.json();
-    if (json.status === 'success' && Array.isArray(json.data)) {
-      const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
-      if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
-      if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
-        masterData = json.masterData;
-        localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-        syncFleetFromMaster();
-        renderAdminTables();
-      }
-      renderAll();
-    }
-  } catch (err) {
-    console.warn('Gagal POST ke Google Apps Script:', err);
-  }
+  return gasPost(payload);
 }
 
 
@@ -1412,8 +1475,75 @@ async function adminApplyFleetStatus(fleetIndex) {
   renderAdminFleetStatus();
 }
 
+let adminAuthUsers = [];
+
+async function loadAdminAuthUsers(force) {
+  const tbody = document.getElementById('adminAuthUsersBody');
+  if (!tbody) return;
+  if (typeof currentUser !== 'undefined' && currentUser?.role !== 'admin') {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-muted">Hanya Admin.</td></tr>';
+    return;
+  }
+  if (!gasWebAppUrl) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-amber-700">Hubungkan Apps Script untuk kelola akun server.</td></tr>';
+    return;
+  }
+  if (!force && adminAuthUsers.length) {
+    renderAdminAuthUsers();
+    return;
+  }
+  const json = await gasPost({ action: 'listUsers' });
+  if (json?.status === 'success' && Array.isArray(json.users)) {
+    adminAuthUsers = json.users;
+    renderAdminAuthUsers();
+  } else if (json?.message) {
+    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-xs text-rose-700">${escapeHtml(json.message)}</td></tr>`;
+  }
+}
+window.loadAdminAuthUsers = loadAdminAuthUsers;
+
+function renderAdminAuthUsers() {
+  const tbody = document.getElementById('adminAuthUsersBody');
+  if (!tbody) return;
+  if (!adminAuthUsers.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-muted">Belum ada akun. Simpan Master Data untuk membuat akun personil OMC.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adminAuthUsers.map(u => `
+    <tr class="hover:bg-surface-3 transition">
+      <td class="py-2 px-3 text-xs font-mono text-body">${escapeHtml(u.username)}</td>
+      <td class="py-2 px-3 text-xs text-body">${escapeHtml(u.name || '-')}</td>
+      <td class="py-2 px-3 text-xs text-muted">${escapeHtml(u.role || '-')}</td>
+      <td class="py-2 px-3 text-xs font-mono text-muted">${escapeHtml(u.nop || '-')}</td>
+      <td class="py-2 px-3 whitespace-nowrap">
+        <button type="button" onclick='adminResetPassword(${JSON.stringify(u.username)})' class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[11px] font-semibold text-amber-800">Reset password</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function adminResetPassword(username) {
+  if (!confirm('Reset password untuk ' + username + '? Password baru akan ditampilkan sekali.')) return;
+  const json = await gasPost({ action: 'setPassword', targetUsername: username });
+  const hint = document.getElementById('adminAuthHint');
+  if (json?.status === 'success' && json.newPassword) {
+    if (hint) {
+      hint.textContent = `Password baru untuk ${username}: ${json.newPassword} — salin sekarang, tidak ditampilkan lagi.`;
+      hint.classList.remove('hidden');
+    }
+    if (Array.isArray(json.users)) {
+      adminAuthUsers = json.users;
+      renderAdminAuthUsers();
+    }
+  } else {
+    alert(json?.message || 'Gagal reset password.');
+  }
+}
+window.adminResetPassword = adminResetPassword;
+
 function renderAdminTables() {
   renderAdminFleetStatus();
+  loadAdminAuthUsers(false);
   Object.keys(ADMIN_TABLES).forEach(key => {
     const tbody = document.getElementById('adminTbody_' + key);
     if (!tbody) return;

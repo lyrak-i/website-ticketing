@@ -57,13 +57,16 @@ function saveSession(user) {
     nop: user.nop || '',
     orderId: user.orderId || '',
     token: user.token || '',
+    sessionToken: user.sessionToken || '',
     loginAt: Date.now()
   }));
 }
 
 function readSession() {
   try {
-    const s = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY));
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
     if (!s || !s.username) return null;
     if (Date.now() - (s.loginAt || 0) > SESSION_TTL_MS) {
       localStorage.removeItem(AUTH_SESSION_KEY);
@@ -71,6 +74,7 @@ function readSession() {
     }
     return s;
   } catch (err) {
+    localStorage.removeItem(AUTH_SESSION_KEY);
     return null;
   }
 }
@@ -152,6 +156,21 @@ async function handleLoginSubmit(event) {
   const errEl = document.getElementById('loginError');
   if (errEl) errEl.classList.add('hidden');
 
+  const activeUrl = (typeof gasWebAppUrl !== 'undefined' && gasWebAppUrl) || localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
+  if (activeUrl && typeof gasPost === 'function') {
+    const json = await gasPost({ action: 'login', username, password }, { auth: false });
+    if (!json || json.status !== 'success') {
+      showLoginError((json && json.message) || 'Login gagal.');
+      return;
+    }
+    const user = { ...json.user, sessionToken: json.sessionToken };
+    saveSession(user);
+    applyUser(user, false);
+    if (typeof syncFromServer === 'function') await syncFromServer(true);
+    return;
+  }
+
+  // Demo lokal tanpa backend
   let user = DEMO_USERS.find(u => u.username === username);
   if (!user && typeof masterData !== 'undefined' && Array.isArray(masterData.personil)) {
     const personil = masterData.personil.find(p => String(p.id).toLowerCase() === username);
@@ -190,7 +209,7 @@ async function handleLoginSubmit(event) {
   }
 
   saveSession(user);
-  applyUser(user, isDemoMode());
+  applyUser(user, true);
 }
 
 async function tryMagicLinkAuth() {
@@ -206,6 +225,15 @@ async function tryMagicLinkAuth() {
   if (incomingGasUrl && typeof gasWebAppUrl !== 'undefined') {
     gasWebAppUrl = incomingGasUrl;
     if (typeof updateConnectionBadge === 'function') updateConnectionBadge();
+  }
+
+  let magicGate = null;
+  if (gasWebAppUrl && typeof gasPost === 'function') {
+    magicGate = await gasPost({ action: 'validateMagicLink', orderId: oid, token: tkn, namaMbp: mbp }, { auth: false });
+    if (!magicGate || magicGate.status !== 'success') {
+      showLoginError((magicGate && magicGate.message) || 'Link tugas tidak valid.');
+      return true;
+    }
   }
 
   // Bersihkan URL bar agar rapi dan tidak di-bookmark mentah
@@ -247,8 +275,14 @@ async function tryMagicLinkAuth() {
     unit.tsCurrentStatusStart = dispatchedAt;
   }
 
-  saveSession(mbpUser);
-  applyUser(mbpUser, isDemoMode());
+  if (magicGate && magicGate.status === 'success') {
+    const merged = { ...mbpUser, ...magicGate.user, sessionToken: magicGate.sessionToken, token: tkn };
+    saveSession(merged);
+    applyUser(merged, false);
+  } else {
+    saveSession(mbpUser);
+    applyUser(mbpUser, isDemoMode());
+  }
   if (typeof renderAll === 'function') renderAll();
 
   // Validasi ke Google Sheets di latar belakang
@@ -302,7 +336,11 @@ function startDemoMode() {
   applyUser(user, true);
 }
 
-function logout() {
+async function logout() {
+  const session = readSession();
+  if (session?.sessionToken && gasWebAppUrl && typeof gasPost === 'function') {
+    await gasPost({ action: 'logout', sessionToken: session.sessionToken }, { auth: false });
+  }
   localStorage.removeItem(AUTH_SESSION_KEY);
   currentUser = null;
 
@@ -335,10 +373,17 @@ function initAuth() {
   const notice = document.getElementById('loginNotice');
   if (isDemoMode()) {
     if (footer) footer.classList.remove('hidden');
-    if (notice) notice.textContent = 'Login OMC: username = ID personil di Master (mis. psn-01), password default omc2026. Admin: admin / admin2026. MBP via link WhatsApp.';
+    if (notice) notice.textContent = 'Mode demo lokal — tanpa backend. OMC: omc / omc2026, Admin: admin / admin2026. MBP via link WhatsApp.';
+  } else if (notice) {
+    notice.textContent = 'Login diverifikasi server. OMC: username = ID personil (mis. psn-01). Admin kelola akun di tab Admin.';
   }
 
-  const session = readSession();
+  let session = readSession();
+  const activeUrl = (typeof gasWebAppUrl !== 'undefined' && gasWebAppUrl) || localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
+  if (session && activeUrl && !session.sessionToken) {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    session = null;
+  }
   if (session) {
     const login = document.getElementById('loginScreen');
     if (login) login.classList.add('hidden');
