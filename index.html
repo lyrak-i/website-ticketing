@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#ffffff" />
   <title>MBP Command & Field Monitor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=20260311d">
+  <link rel="stylesheet" href="css/app.css?v=122012087c">
 </head>
 <body class="min-h-screen flex flex-col bg-surface-2 selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
 
@@ -16,7 +13,7 @@
   <div id="loginScreen" class="fixed inset-0 z-[60] bg-surface-2 flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-surface border border-line rounded-2xl p-5 sm:p-6 shadow-xl">
       <div class="flex items-center gap-2.5 mb-5">
-        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shrink-0">⚡</div>
+        <div class="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-lg shrink-0">M</div>
         <div>
           <h1 class="font-bold text-body text-sm sm:text-base leading-tight">MBP Dispatch &amp; Monitor</h1>
           <p class="text-[11px] text-muted">Masuk untuk melanjutkan</p>
@@ -54,7 +51,7 @@
       <!-- Brand & Status -->
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/20 shrink-0">
-          ⚡
+          M
         </div>
         <div>
           <div class="flex items-center gap-2 flex-wrap">
@@ -70,10 +67,10 @@
       <!-- Action Buttons -->
       <div class="flex items-center gap-1.5 ml-auto sm:order-3">
         <button onclick="syncFromServer(true)" title="Sinkronisasi Data" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-xs font-medium text-body border border-line-strong flex items-center gap-1 transition">
-          <span id="syncIcon">🔄</span> <span class="hidden sm:inline">Sync</span>
+          <span class="hidden sm:inline">Sync</span>
         </button>
         <button onclick="toggleConfigModal()" title="Pengaturan API" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-xs font-medium text-body border border-line-strong transition">
-          ⚙️ <span class="hidden sm:inline">API</span>
+          <span class="hidden sm:inline">API</span>
         </button>
 
         <!-- Identitas pengguna aktif -->
@@ -91,13 +88,13 @@
       <!-- Role Switcher Tabs (hanya Mode Demo) -->
       <div id="roleSwitcher" class="hidden w-full sm:w-auto flex items-center gap-1 bg-surface-2 p-1 rounded-xl border border-line sm:order-2">
         <button id="tabOmc" onclick="switchRole('omc')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
-          🖥️ OMC Monitor
+          OMC Monitor
         </button>
         <button id="tabMbp" onclick="goToMbpPage()" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-muted hover:text-body">
-          📱 Lapangan MBP
+          Lapangan MBP
         </button>
         <button id="tabAdmin" onclick="switchRole('admin')" class="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-muted hover:text-body">
-          🛠 Admin
+          Admin
         </button>
       </div>
 
@@ -201,7 +198,7 @@
         <div class="bg-surface border border-line rounded-2xl p-4 sm:p-5 shadow-sm">
           <div class="mb-4 pb-3 border-b border-line">
             <h2 class="text-sm sm:text-base font-bold text-body flex items-center gap-2">
-              <span>📡</span> WhatsApp Dispatcher
+              WhatsApp Dispatcher
             </h2>
             <p class="text-xs text-muted mt-0.5">Assign Order ID & kirim tiket instan ke WhatsApp</p>
           </div>
@@ -212,7 +209,7 @@
               <div class="flex items-center gap-2">
                 <input id="dispatchOrderId" type="text" readonly class="w-full bg-surface-2/80 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm font-mono font-bold text-amber-700" />
                 <button type="button" onclick="generateNewOrderId()" class="p-2 rounded-xl bg-surface-3 hover:bg-surface-2 text-xs text-body border border-line-strong" title="Generate ID Baru">
-                  🎲
+                  
                 </button>
               </div>
             </div>
@@ -243,10 +240,10 @@
             <div>
               <label class="block text-xs font-medium text-body mb-1">Prioritas Tiket</label>
               <select id="dispatchPrioritySelect" onchange="updateWaLink()" class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500">
-                <option value="Critical">🔴 Critical (Genset Down / VIP)</option>
-                <option value="High" selected>🟠 High (Low Battery)</option>
-                <option value="Medium">🟡 Medium (PLN Padam)</option>
-                <option value="Low">🟢 Low (Standby / Patrol)</option>
+                <option value="Critical">Critical (Genset Down / VIP)</option>
+                <option value="High" selected>High (Low Battery)</option>
+                <option value="Medium">Medium (PLN Padam)</option>
+                <option value="Low">Low (Standby / Patrol)</option>
               </select>
             </div>
 
@@ -258,7 +255,7 @@
 
             <!-- Tautan Link Native (Menampilkan URL saat di-hover & Kebal Pop-up Blocker) -->
             <a id="btnKirimWa" href="#" target="_blank" rel="noopener noreferrer" onclick="handleDispatchClick(event)" class="w-full py-2.5 sm:py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition active:scale-95 text-center">
-              <span>💬</span> Kirim Tiket via WA
+              Kirim Tiket via WA
             </a>
           </form>
         </div>
@@ -302,7 +299,7 @@
         <div class="p-3.5 sm:p-5 border-b border-line flex items-center justify-between gap-2">
           <div>
             <h2 class="text-sm sm:text-base font-bold text-body flex items-center gap-2">
-              <span>📋</span> Log Tiket Order ID (Google Sheets)
+              Log Tiket Order ID (Google Sheets)
             </h2>
             <p class="text-[11px] text-muted">Setiap order id unik tersimpan pada baris baru lengkap dengan rekaman durasi idle sebelumnya</p>
           </div>
@@ -340,7 +337,7 @@
 
       <div class="bg-surface border border-line rounded-2xl p-4 sm:p-5 shadow-sm">
         <h2 class="text-sm sm:text-base font-bold text-body flex items-center gap-2">
-          <span>🛠</span> Master Data
+          Master Data
         </h2>
         <p class="text-xs text-muted mt-0.5">Personil OMC, Site List, dan Unit MBP. Tersimpan di localStorage browser ini.</p>
       </div>
@@ -431,8 +428,8 @@
   <div id="configModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
     <div class="bg-surface border border-line-strong rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-xl">
       <div class="flex items-center justify-between border-b border-line pb-3">
-        <h3 class="font-bold text-body text-sm sm:text-base">⚙️ Konfigurasi Google Apps Script API</h3>
-        <button onclick="toggleConfigModal()" class="text-muted hover:text-body text-sm p-1">✕</button>
+        <h3 class="font-bold text-body text-sm sm:text-base">Konfigurasi Google Apps Script API</h3>
+        <button onclick="toggleConfigModal()" class="text-muted hover:text-body text-sm p-1">&times;</button>
       </div>
       <div class="space-y-2">
         <label class="block text-xs font-medium text-body">Web App URL (`.../exec`)</label>
@@ -455,9 +452,9 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20260311c"></script>
-  <script src="js/demo-users.js?v=20260311c"></script>
-  <script src="js/auth.js?v=20260311c"></script>
-  <script src="js/app.js?v=20260311c"></script>
+  <script defer src="js/config.js?v=04c1e0c7d8"></script>
+  <script defer src="js/demo-users.js?v=5b046af8a4"></script>
+  <script defer src="js/auth.js?v=7f357e8b32"></script>
+  <script defer src="js/app.js?v=f8e42f2688"></script>
 </body>
 </html>

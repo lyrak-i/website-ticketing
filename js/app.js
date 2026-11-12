@@ -197,8 +197,8 @@ function getStatusBadgeHtml(status) {
   };
   const cls = styles[label] || styles['Idle'];
   const dotCls = dot[label] || dot['Idle'];
-  return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${cls} whitespace-nowrap">
-    <span class="w-1.5 h-1.5 rounded-full ${dotCls} shrink-0"></span>
+  return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[13px] font-semibold ${cls} whitespace-nowrap">
+    <span class="w-2 h-2 rounded-full ${dotCls} shrink-0"></span>
     ${escapeHtml(label)}
   </span>`;
 }
@@ -259,10 +259,11 @@ const MBP_STEP = {
   waiting_selesai: { label: 'Menunggu Approval Selesai', hint: 'Tunggu OMC menyetujui penutupan tiket', disabled: true, cls: 'sky' }
 };
 
+// Tombol aksi: latar berwarna solid, teks gelap (hitam) supaya kontrasnya kuat di tema terang.
 const BTN_CLS = {
   amber: { active: 'border-amber-500 bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25', idle: 'border-amber-500/30 bg-surface-2 text-amber-700' },
-  orange: { active: 'border-orange-500 bg-orange-500 text-white shadow-lg shadow-orange-500/25', idle: 'border-orange-500/30 bg-surface-2 text-orange-700' },
-  sky: { active: 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-600/25', idle: 'border-sky-500/30 bg-surface-2 text-sky-700' }
+  orange: { active: 'border-orange-500 bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/25', idle: 'border-orange-500/30 bg-surface-2 text-orange-700' },
+  sky: { active: 'border-sky-600 bg-sky-600 text-slate-950 shadow-lg shadow-sky-600/25', idle: 'border-sky-500/30 bg-surface-2 text-sky-700' }
 };
 
 function initApp() {
@@ -380,6 +381,13 @@ function populateSelectDropdowns() {
       `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)}</option>`
     ).join('');
     mobSelect.value = currentMob;
+    // Tampilkan pemilih unit hanya bila memang berguna: >1 unit tersedia,
+    // atau unit yang aktif tidak ditemukan di daftar (mis. magic link unit typo).
+    const picker = document.getElementById('mobileMbpPicker');
+    if (picker) {
+      const needsPicker = fleetList.length > 1 || !fleetList.some(m => m.namaMbp === currentMob);
+      picker.classList.toggle('hidden', !needsPicker);
+    }
   }
 
   if (!omcSelect && !mobSelect) return;
@@ -969,7 +977,7 @@ function renderOmcView() {
 function approvalCellHtml(item) {
   const to = OMC_APPROVALS[item.status];
   if (!to) return '<span class="text-faint text-[11px] font-mono">-</span>';
-  const label = to === 'onsite' ? '✔ Approve Onsite' : '✔ Approve Selesai';
+  const label = to === 'onsite' ? 'Approve Onsite' : 'Approve Selesai';
   return `<button onclick="approveOrder('${escapeHtml(item.orderId)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition">${label}</button>`;
 }
 
@@ -1027,7 +1035,7 @@ function renderMobileView() {
   const palette = BTN_CLS[step.cls] || BTN_CLS.amber;
   const btn = document.getElementById('btnMbpAction');
   if (btn) {
-    const base = 'status-btn w-full py-4 px-5 rounded-2xl border-2 flex items-center justify-between transition-all';
+    const base = 'status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-center transition-colors';
     const tone = step.disabled ? palette.idle : palette.active;
     btn.disabled = !!step.disabled;
     btn.className = `${base} ${tone}`;
@@ -1144,8 +1152,6 @@ async function syncFromServer(showSpinner = false) {
     return;
   }
   isSyncing = true;
-  const icon = document.getElementById('syncIcon');
-  if (showSpinner && icon) icon.classList.add('animate-spin');
 
   try {
     const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
@@ -1158,7 +1164,6 @@ async function syncFromServer(showSpinner = false) {
   } catch (err) {
     console.warn('Gagal sinkronisasi data dari Apps Script:', err);
   } finally {
-    if (showSpinner && icon) icon.classList.remove('animate-spin');
     isSyncing = false;
   }
 }

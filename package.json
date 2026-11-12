@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "build:css": "tailwindcss -i src/input.css -o css/app.css --minify",
-    "watch:css": "tailwindcss -i src/input.css -o css/app.css --watch"
+    "watch:css": "tailwindcss -i src/input.css -o css/app.css --watch",
+    "stamp": "python tools/stamp_assets.py",
+    "build": "npm run build:css && npm run stamp"
   },
   "repository": {
     "type": "git",
