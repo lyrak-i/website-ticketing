@@ -1,0 +1,5 @@
+# Normalisasi line ending: LF di repo dan di working tree.
+# Tanpa ini, checkout Windows (core.autocrlf) mengubah byte file,
+# sehingga hash ?v= di stamp_assets.py tidak cocok dengan byte yang
+# benar-benar di-deploy GitHub Pages.
+* text=auto eol=lf
