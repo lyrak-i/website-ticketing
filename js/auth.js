@@ -54,6 +54,7 @@ function saveSession(user) {
     name: user.name,
     role: user.role,
     unit: user.unit || '',
+    nop: user.nop || '',
     orderId: user.orderId || '',
     token: user.token || '',
     loginAt: Date.now()
@@ -100,7 +101,8 @@ function applyUser(user, demo) {
   if (nameEl) nameEl.textContent = user.name;
   const roleEl = document.getElementById('userRole');
   if (roleEl) {
-    roleEl.textContent = isMbp ? `Tiket: ${user.orderId || '-'}` : (demo ? `${user.role} (demo)` : user.role);
+    const nopNote = user.role === 'omc' && user.nop ? ` · NOP ${user.nop}` : '';
+    roleEl.textContent = isMbp ? `Tiket: ${user.orderId || '-'}` : (demo ? `${user.role} (demo)${nopNote}` : `${user.role}${nopNote}`);
   }
 
   // 3. Khusus Teknisi MBP (Orang Awam / HP Low-End):
@@ -133,6 +135,7 @@ function applyUser(user, demo) {
   if (typeof switchRole === 'function') {
     switchRole(user.role === 'admin' ? 'admin' : user.role);
   }
+  if (typeof refreshNopFilterUi === 'function') refreshNopFilterUi();
 }
 
 function showLoginError(msg) {
@@ -149,7 +152,21 @@ async function handleLoginSubmit(event) {
   const errEl = document.getElementById('loginError');
   if (errEl) errEl.classList.add('hidden');
 
-  const user = DEMO_USERS.find(u => u.username === username);
+  let user = DEMO_USERS.find(u => u.username === username);
+  if (!user && typeof masterData !== 'undefined' && Array.isArray(masterData.personil)) {
+    const personil = masterData.personil.find(p => String(p.id).toLowerCase() === username);
+    const omcBase = DEMO_USERS.find(u => u.username === 'omc');
+    if (personil && omcBase) {
+      user = {
+        username: String(personil.id).toLowerCase(),
+        name: personil.nama,
+        role: 'omc',
+        nop: personil.nop || '',
+        unit: '',
+        hash: omcBase.hash
+      };
+    }
+  }
   if (!user) {
     showLoginError('Username tidak dikenal.');
     return;
@@ -318,7 +335,7 @@ function initAuth() {
   const notice = document.getElementById('loginNotice');
   if (isDemoMode()) {
     if (footer) footer.classList.remove('hidden');
-    if (notice) notice.textContent = 'Login manual khusus OMC & Admin. Teknisi MBP masuk melalui link WhatsApp.';
+    if (notice) notice.textContent = 'Login OMC: username = ID personil di Master (mis. psn-01), password default omc2026. Admin: admin / admin2026. MBP via link WhatsApp.';
   }
 
   const session = readSession();

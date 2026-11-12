@@ -19,6 +19,34 @@ Backend ada di `apps-script/Code.gs` (deploy manual — tidak ikut ter-push).
 > Kalau Sheet kamu punya tab selain `Sheet1`, ubah `getSheetName()`.
 > Setelah kode diubah: **Deploy → Manage deployments → Edit → Version: New version → Deploy**.
 
+### Google Sheet: tiket + master data
+
+**Tab `Sheet1` (tiket)** — header baris 1, urutan kolom harus sama seperti di `apps-script/Code.gs` → `getColumns()`. Baris lama tidak perlu diubah.
+
+**Tab baru `MasterData`** (untuk login OMC per NOP & unit MBP):
+
+1. Di spreadsheet yang sama, buat tab bernama **`MasterData`** (nama persis).
+2. Sel **`A1`** berisi satu objek JSON:
+   ```json
+   {
+     "personil": [{"id":"PSN-01","nama":"Andi (OMC Palembang)","nop":"PLM-014"}],
+     "sites": [{"siteId":"SITE-PLM-014","nama":"SITE-PLM-014 (Ilir Barat)","nop":"PLM-014","lat":-2.99,"lng":104.75}],
+     "units": [{"id":"MBP-01","nama":"MBP-01 (Tim Alpha)","nop":"PLM-014","noWa":"6281234567801"}]
+   }
+   ```
+3. Isi pertama kali bisa dikosongkan (`{}`); setelah deploy backend baru, buka **Admin** di web lalu **Simpan** master data — JSON akan tertulis ke `A1` lewat aksi `saveMaster`.
+4. **Setiap unit MBP wajib punya field `nop`** (sama dengan NOP wilayah armada). OMC login memakai **username = ID personil huruf kecil** (`psn-01`) dan NOP mengunci filter dashboard.
+
+**Login OMC per NOP (frontend, tanpa ubah Sheet tiket):**
+
+| Username | NOP (dari personil) | Password default (ganti sebelum produksi) |
+|---|---|---|
+| `psn-01` | `PLM-014` | `omc2026` (hash user `omc` di `js/demo-users.js`) |
+| `psn-02` | `BTA-012` | sama |
+| `omc` | semua NOP (demo) | `omc2026` |
+
+Hash password baru: `python tools/hash_password.py` lalu salin ke `js/demo-users.js` atau (nanti) kolom hash di master.
+
 ### Urutan status satu tiket
 
 | Tahap | Status di Sheet | Siapa |

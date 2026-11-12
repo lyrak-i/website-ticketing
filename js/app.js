@@ -3,8 +3,62 @@ let gasWebAppUrl = localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
 let activeRole = 'omc';
 let selectedMobileMbp = '';
 
-// Filter dashboard dari query string, contoh: index.html?nop=PLM-014
-const nopFilter = new URLSearchParams(location.search).get('nop') || '';
+// Filter NOP: OMC dari akun login, Admin dari dropdown, legacy ?nop= di URL
+let adminNopFilter = localStorage.getItem(STORAGE_KEY_ADMIN_NOP) || '';
+
+function getEffectiveNopFilter() {
+  const urlNop = new URLSearchParams(location.search).get('nop') || '';
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    if (currentUser.role === 'omc' && currentUser.nop) return currentUser.nop;
+    if (currentUser.role === 'admin') {
+      const live = document.getElementById('adminNopFilter')?.value;
+      if (live !== undefined && live !== null && live !== '') return live;
+      return adminNopFilter || '';
+    }
+  }
+  return urlNop;
+}
+
+function listKnownNops() {
+  const set = new Set();
+  (masterData.personil || []).forEach(p => { if (p.nop) set.add(p.nop); });
+  (masterData.sites || []).forEach(s => { if (s.nop) set.add(s.nop); });
+  (masterData.units || []).forEach(u => { if (u.nop) set.add(u.nop); });
+  return [...set].sort();
+}
+
+function fleetInScope() {
+  const nf = getEffectiveNopFilter();
+  if (!nf) return fleetList;
+  return fleetList.filter(u => getUnitNop(u).toUpperCase() === nf.toUpperCase());
+}
+
+function sitesInScope() {
+  const nf = getEffectiveNopFilter();
+  if (!nf) return masterData.sites;
+  return masterData.sites.filter(s => (s.nop || '').toUpperCase() === nf.toUpperCase());
+}
+
+function refreshNopFilterUi() {
+  const nf = getEffectiveNopFilter();
+  const banner = document.getElementById('nopFilterBanner');
+  const val = document.getElementById('nopFilterValue');
+  const clearBtn = document.getElementById('nopFilterClearBtn');
+  if (banner) banner.classList.toggle('hidden', !nf);
+  if (val) val.textContent = nf || '-';
+  const sessionBound = typeof currentUser !== 'undefined' && currentUser?.role === 'omc' && currentUser.nop;
+  if (clearBtn) clearBtn.classList.toggle('hidden', !!sessionBound);
+
+  const adminSel = document.getElementById('adminNopFilter');
+  if (adminSel && typeof currentUser !== 'undefined' && currentUser?.role === 'admin') {
+    const nops = listKnownNops();
+    const cur = adminNopFilter;
+    adminSel.innerHTML = '<option value="">Semua NOP</option>' + nops.map(n =>
+      `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`
+    ).join('');
+    adminSel.value = cur;
+  }
+}
 
 // Database Hardcoded Koordinat Site
 const SITE_LOCATIONS = [
@@ -30,10 +84,10 @@ const MASTER_SEED = {
     lng: s.lng
   })),
   units: [
-    { id: 'MBP-01', nama: 'MBP-01 (Tim Alpha)', noWa: '6281234567801' },
-    { id: 'MBP-02', nama: 'MBP-02 (Tim Bravo)', noWa: '6281234567802' },
-    { id: 'MBP-03', nama: 'MBP-03 (Tim Charlie)', noWa: '6281234567803' },
-    { id: 'MBP-04', nama: 'MBP-04 (Tim Delta)', noWa: '6285175393095' }
+    { id: 'MBP-01', nama: 'MBP-01 (Tim Alpha)', noWa: '6281234567801', nop: 'PLM-014' },
+    { id: 'MBP-02', nama: 'MBP-02 (Tim Bravo)', noWa: '6281234567802', nop: 'PLM-014' },
+    { id: 'MBP-03', nama: 'MBP-03 (Tim Charlie)', noWa: '6281234567803', nop: 'PLM-014' },
+    { id: 'MBP-04', nama: 'MBP-04 (Tim Delta)', noWa: '6285175393095', nop: 'BTA-012' }
   ]
 };
 
@@ -42,7 +96,15 @@ let masterData = loadMasterData();
 function loadMasterData() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_MASTER));
-    if (saved && saved.personil && saved.sites && saved.units) return saved;
+    if (saved && saved.personil && saved.sites && saved.units) {
+      saved.units.forEach(u => {
+        if (!u.nop) {
+          const seed = MASTER_SEED.units.find(s => s.id === u.id || s.nama === u.nama);
+          if (seed?.nop) u.nop = seed.nop;
+        }
+      });
+      return saved;
+    }
   } catch (err) { /* data rusak -> pakai seed */ }
   return JSON.parse(JSON.stringify(MASTER_SEED));
 }
@@ -66,8 +128,11 @@ function siteNopOf(siteName) {
   return site ? site.nop : '';
 }
 
-// NOP unit: site aktif, atau NOP order terakhir bila unit sedang idle
+// NOP unit: master data dulu, lalu site aktif / order terakhir
 function getUnitNop(unit) {
+  if (unit.nop) return unit.nop;
+  const master = masterData.units?.find(u => u.nama === unit.namaMbp || u.id === unit.id);
+  if (master?.nop) return master.nop;
   const active = siteNopOf(unit.activeSite);
   if (active) return active;
   const last = orderList.find(o => o.namaMbp === unit.namaMbp);
@@ -299,12 +364,7 @@ function initApp() {
   generateNewOrderId();
   renderAdminTables();
 
-  const banner = document.getElementById('nopFilterBanner');
-  if (banner) {
-    banner.classList.toggle('hidden', !nopFilter);
-    const val = document.getElementById('nopFilterValue');
-    if (val) val.textContent = nopFilter;
-  }
+  refreshNopFilterUi();
 
   (async () => {
     if (typeof HAS_MAGIC_LINK !== 'undefined' && HAS_MAGIC_LINK && typeof tryMagicLinkAuth === 'function') {
@@ -372,11 +432,12 @@ function populateSelectDropdowns() {
   const currentOmc = omcSelect?.value || fleetList[0]?.namaMbp;
   const currentMob = selectedMobileMbp || fleetList[0]?.namaMbp;
 
+  const scopedFleet = fleetInScope();
   if (omcSelect) {
-    omcSelect.innerHTML = fleetList.map(m =>
+    omcSelect.innerHTML = scopedFleet.map(m =>
       `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)} — [${escapeHtml(STATUS_LABEL[statusKey(m.status)])}]</option>`
     ).join('');
-    omcSelect.value = currentOmc;
+    omcSelect.value = scopedFleet.some(m => m.namaMbp === currentOmc) ? currentOmc : (scopedFleet[0]?.namaMbp || '');
   }
 
   if (mobSelect) {
@@ -399,10 +460,11 @@ function populateSelectDropdowns() {
   const siteSelect = document.getElementById('dispatchSiteSelect');
   if (siteSelect) {
     const currentSite = siteSelect.value;
-    siteSelect.innerHTML = masterData.sites.map(s =>
+    const sites = sitesInScope();
+    siteSelect.innerHTML = sites.map(s =>
       `<option value="${escapeHtml(s.nama || s.siteId)}">${escapeHtml(s.nama || s.siteId)} — NOP ${escapeHtml(s.nop)}</option>`
     ).join('');
-    if (currentSite && masterData.sites.some(s => s.siteId === currentSite || s.nama === currentSite)) {
+    if (currentSite && sites.some(s => s.siteId === currentSite || s.nama === currentSite)) {
       siteSelect.value = currentSite;
     }
   }
@@ -878,14 +940,16 @@ function renderAll() {
 
 function renderOmcView() {
   if (!document.getElementById('viewOmc')) return;
-  const total = fleetList.length;
-  const idleCount = fleetList.filter(m => statusKey(m.status) === 'idle').length;
-  const movingCount = fleetList.filter(m => {
+  refreshNopFilterUi();
+  const scoped = fleetInScope();
+  const total = scoped.length;
+  const idleCount = scoped.filter(m => statusKey(m.status) === 'idle').length;
+  const movingCount = scoped.filter(m => {
     const s = statusKey(m.status);
     return s === 'otw' || s === 'belum_otw';
   }).length;
   // waiting_* = unit sudah di site, hanya menunggu approval OMC
-  const onsiteCount = fleetList.filter(m => ['onsite', 'waiting_onsite', 'waiting_selesai'].includes(statusKey(m.status))).length;
+  const onsiteCount = scoped.filter(m => ['onsite', 'waiting_onsite', 'waiting_selesai'].includes(statusKey(m.status))).length;
 
   const idlePct = total > 0 ? ((idleCount / total) * 100).toFixed(0) : '0';
   const movingPct = total > 0 ? ((movingCount / total) * 100).toFixed(0) : '0';
@@ -907,14 +971,12 @@ function renderOmcView() {
   document.getElementById('distLabelMoving').textContent = `${movingPct}%`;
   document.getElementById('distLabelOnsite').textContent = `${onsitePct}%`;
 
-  // Filter dashboard: ?nop=PLM-014 (tanpa parameter = semua NOP)
-  const visibleFleet = nopFilter
-    ? fleetList.filter(u => getUnitNop(u).toUpperCase() === nopFilter.toUpperCase())
-    : fleetList;
+  const nf = getEffectiveNopFilter();
+  const visibleFleet = fleetInScope();
 
   const fleetTbody = document.getElementById('fleetTableBody');
   if (visibleFleet.length === 0) {
-    fleetTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-500 text-xs font-mono">Tidak ada unit untuk NOP ${escapeHtml(nopFilter)}</td></tr>`;
+    fleetTbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-500 text-xs font-mono">Tidak ada unit untuk NOP ${escapeHtml(nf)}</td></tr>`;
   } else {
     fleetTbody.innerHTML = visibleFleet.map(unit => {
       const pending = unit.pendingOrder;
@@ -943,8 +1005,8 @@ function renderOmcView() {
     }).join('');
   }
 
-  const visibleOrders = nopFilter
-    ? orderList.filter(o => getOrderNop(o).toUpperCase() === nopFilter.toUpperCase())
+  const visibleOrders = nf
+    ? orderList.filter(o => getOrderNop(o).toUpperCase() === nf.toUpperCase())
     : orderList;
 
   document.getElementById('totalOrdersCount').textContent = visibleOrders.length;
@@ -1162,12 +1224,12 @@ async function syncFromServer(showSpinner = false) {
     if (json.status === 'success' && Array.isArray(json.data)) {
       const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
       if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
-      if (json.masterData && json.masterData.units?.length) {
-      masterData = json.masterData;
-      localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-      syncFleetFromMaster();
-      renderAdminTables();
-    }
+      if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
+        masterData = json.masterData;
+        localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+        syncFleetFromMaster();
+        renderAdminTables();
+      }
       renderAll();
     }
   } catch (err) {
@@ -1189,12 +1251,12 @@ async function postToGas(payload) {
     if (json.status === 'success' && Array.isArray(json.data)) {
       const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
       if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
-      if (json.masterData && json.masterData.units?.length) {
-      masterData = json.masterData;
-      localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-      syncFleetFromMaster();
-      renderAdminTables();
-    }
+      if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
+        masterData = json.masterData;
+        localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+        syncFleetFromMaster();
+        renderAdminTables();
+      }
       renderAll();
     }
   } catch (err) {
@@ -1229,10 +1291,11 @@ const ADMIN_TABLES = {
   },
   units: {
     label: 'Unit MBP',
-    cols: ['ID', 'Nama Unit', 'No. WhatsApp'],
+    cols: ['ID', 'Nama Unit', 'NOP', 'No. WhatsApp'],
     fields: [
       { key: 'id', label: 'ID', type: 'text' },
       { key: 'nama', label: 'Nama Unit', type: 'text' },
+      { key: 'nop', label: 'NOP', type: 'text' },
       { key: 'noWa', label: 'No. WhatsApp', type: 'text' }
     ]
   }
@@ -1240,7 +1303,116 @@ const ADMIN_TABLES = {
 
 let adminEdit = { table: null, index: -1 };
 
+const ADMIN_SETTABLE_STATUSES = [
+  'idle', 'belum_otw', 'otw', 'waiting_onsite', 'onsite', 'waiting_selesai', 'selesai'
+];
+
+function renderAdminFleetStatus() {
+  const tbody = document.getElementById('adminFleetStatusBody');
+  if (!tbody) return;
+  refreshNopFilterUi();
+
+  const rows = fleetInScope();
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500 text-xs font-mono">Tidak ada unit armada</td></tr>';
+    return;
+  }
+
+  const opts = ADMIN_SETTABLE_STATUSES.map(k =>
+    `<option value="${k}">${escapeHtml(STATUS_LABEL[k])}</option>`
+  ).join('');
+
+  tbody.innerHTML = rows.map((unit, i) => {
+    const fleetIndex = fleetList.indexOf(unit);
+    const cur = statusKey(unit.status);
+    const pending = unit.pendingOrder;
+    const belum = cur === 'belum_otw';
+    const displayOid = belum && pending ? pending.orderId : unit.activeOrderId;
+    return `
+      <tr class="hover:bg-surface-3 transition">
+        <td class="py-2 px-3 text-xs font-bold text-body whitespace-nowrap">${escapeHtml(unit.namaMbp)}</td>
+        <td class="py-2 px-3 text-xs font-mono text-amber-700 whitespace-nowrap">${escapeHtml(displayOid || '-')}</td>
+        <td class="py-2 px-3 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
+        <td class="py-2 px-3 whitespace-nowrap">
+          <select id="adminStatusSelect_${i}" class="bg-surface-2 border border-line-strong rounded-lg px-2 py-1.5 text-[11px] text-body focus:outline-none focus:border-amber-500">
+            ${opts}
+          </select>
+        </td>
+        <td class="py-2 px-3 whitespace-nowrap">
+          <button type="button" onclick="adminApplyFleetStatus(${fleetIndex})" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">Terapkan</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  rows.forEach((unit, i) => {
+    const sel = document.getElementById('adminStatusSelect_' + i);
+    if (sel) sel.value = statusKey(unit.status);
+  });
+}
+
+async function applyAdminStatusOverride(unit, to) {
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+  to = statusKey(to);
+
+  let order = unit.activeOrderId && unit.activeOrderId !== '-'
+    ? orderList.find(o => o.orderId === unit.activeOrderId)
+    : null;
+  if (!order && unit.pendingOrder) {
+    order = orderList.find(o => o.orderId === unit.pendingOrder.orderId);
+  }
+
+  if (to === 'idle' || to === 'selesai') {
+    if (order && to === 'selesai') order.tsSelesai = nowIso;
+    const orderSnap = order;
+    closeOrder(unit, nowIso, nowMs);
+    saveAndBroadcast();
+    if (gasWebAppUrl && orderSnap) {
+      await postToGas(buildOrderPayload(unit, orderSnap, STATUS_LABEL.selesai, nowIso));
+    }
+    return;
+  }
+
+  if (order) {
+    order.status = to;
+    if (to === 'otw' && !order.tsOtw) order.tsOtw = nowIso;
+    if (to === 'onsite' && !order.tsOnsite) order.tsOnsite = nowIso;
+  }
+
+  unit.status = to;
+  unit.tsCurrentStatusStart = nowIso;
+
+  saveAndBroadcast();
+
+  if (gasWebAppUrl && order) {
+    await postToGas(buildOrderPayload(unit, order, STATUS_LABEL[to] || to, nowIso));
+  }
+}
+
+async function adminApplyFleetStatus(fleetIndex) {
+  const unit = fleetList[fleetIndex];
+  if (!unit) return;
+
+  const sel = document.getElementById('adminStatusSelect_' + fleetIndex);
+  if (!sel) return;
+
+  const to = statusKey(sel.value);
+  const from = statusKey(unit.status);
+  if (to === from) {
+    alert('Status sudah sama.');
+    return;
+  }
+
+  const fromLabel = STATUS_LABEL[from] || from;
+  const toLabel = STATUS_LABEL[to] || to;
+  if (!confirm(`Ubah status ${unit.namaMbp}\n${fromLabel} → ${toLabel}?`)) return;
+
+  await applyAdminStatusOverride(unit, to);
+  renderAdminFleetStatus();
+}
+
 function renderAdminTables() {
+  renderAdminFleetStatus();
   Object.keys(ADMIN_TABLES).forEach(key => {
     const tbody = document.getElementById('adminTbody_' + key);
     if (!tbody) return;
@@ -1372,7 +1544,7 @@ function syncFleetFromMaster() {
     let unit = fleetList.find(f => f.namaMbp === u.nama || f.id === u.id);
     if (!unit) {
       fleetList.push({
-        id: u.id, namaMbp: u.nama, noWa: u.noWa, status: 'idle', activeOrderId: '-', activeSite: '-',
+        id: u.id, namaMbp: u.nama, noWa: u.noWa, nop: u.nop || '', status: 'idle', activeOrderId: '-', activeSite: '-',
         activePriority: 'Low', tsIdleStart: new Date().toISOString(),
         tsCurrentStatusStart: new Date().toISOString(), pendingOrder: null,
         estimasiEta: '-', selisihOtwEta: '-'
@@ -1380,6 +1552,7 @@ function syncFleetFromMaster() {
     } else {
       unit.namaMbp = u.nama;
       unit.noWa = u.noWa;
+      unit.nop = u.nop || unit.nop || '';
     }
   });
   // 2. Hapus unit dari fleetList jika sudah dihapus oleh Admin (kecuali sedang memegang order aktif)
@@ -1425,7 +1598,22 @@ function switchRole(role) {
   renderAll();
 }
 
+function setAdminNopFilter(nop) {
+  adminNopFilter = nop || '';
+  if (adminNopFilter) localStorage.setItem(STORAGE_KEY_ADMIN_NOP, adminNopFilter);
+  else localStorage.removeItem(STORAGE_KEY_ADMIN_NOP);
+  refreshNopFilterUi();
+  populateSelectDropdowns();
+  renderAll();
+  if (activeRole === 'admin') renderAdminTables();
+}
+window.setAdminNopFilter = setAdminNopFilter;
+
 function clearNopFilter() {
+  if (typeof currentUser !== 'undefined' && currentUser?.role === 'admin') {
+    setAdminNopFilter('');
+    return;
+  }
   const url = new URL(location.href);
   url.searchParams.delete('nop');
   location.href = url.toString();

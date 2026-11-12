@@ -14,3 +14,4 @@ const STORAGE_KEY_ORDERS = 'mbp_orders_log_v2';
 const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
 const AUTH_SESSION_KEY = 'mbp_auth_session_v1';
 const STORAGE_KEY_MASTER = 'mbp_master_data_v1';
+const STORAGE_KEY_ADMIN_NOP = 'mbp_admin_nop_filter_v1';
