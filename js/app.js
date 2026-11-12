@@ -49,6 +49,9 @@ function loadMasterData() {
 
 function saveMasterData() {
   localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+  if (gasWebAppUrl) {
+    postToGas({ action: 'saveMaster', masterData });
+  }
 }
 
 // Nop aktif sebuah order: dari Site List dulu, fallback ke nop di record order
@@ -1159,6 +1162,12 @@ async function syncFromServer(showSpinner = false) {
     if (json.status === 'success' && Array.isArray(json.data)) {
       const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
       if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
+      if (json.masterData && json.masterData.units?.length) {
+      masterData = json.masterData;
+      localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+      syncFleetFromMaster();
+      renderAdminTables();
+    }
       renderAll();
     }
   } catch (err) {
@@ -1180,6 +1189,12 @@ async function postToGas(payload) {
     if (json.status === 'success' && Array.isArray(json.data)) {
       const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
       if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
+      if (json.masterData && json.masterData.units?.length) {
+      masterData = json.masterData;
+      localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+      syncFleetFromMaster();
+      renderAdminTables();
+    }
       renderAll();
     }
   } catch (err) {
@@ -1352,19 +1367,24 @@ function adminDeleteRow(table, index) {
 
 // Unit MBP master = sumber kebenaran nama & WA armada
 function syncFleetFromMaster() {
+  // 1. Tambah atau update unit dari masterData.units
   masterData.units.forEach(u => {
-    let unit = fleetList.find(f => f.namaMbp === u.nama);
+    let unit = fleetList.find(f => f.namaMbp === u.nama || f.id === u.id);
     if (!unit) {
-      unit = {
-        namaMbp: u.nama, noWa: u.noWa, status: 'idle', activeOrderId: '-', activeSite: '-',
+      fleetList.push({
+        id: u.id, namaMbp: u.nama, noWa: u.noWa, status: 'idle', activeOrderId: '-', activeSite: '-',
         activePriority: 'Low', tsIdleStart: new Date().toISOString(),
         tsCurrentStatusStart: new Date().toISOString(), pendingOrder: null,
         estimasiEta: '-', selisihOtwEta: '-'
-      };
-      fleetList.push(unit);
+      });
+    } else {
+      unit.namaMbp = u.nama;
+      unit.noWa = u.noWa;
     }
-    unit.noWa = u.noWa;
   });
+  // 2. Hapus unit dari fleetList jika sudah dihapus oleh Admin (kecuali sedang memegang order aktif)
+  const validNames = new Set(masterData.units.map(u => u.nama));
+  fleetList = fleetList.filter(f => validNames.has(f.namaMbp) || statusKey(f.status) !== 'idle');
 }
 
 function goToMbpPage() {
