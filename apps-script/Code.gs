@@ -13,8 +13,8 @@
  * Setiap perubahan kode: Deploy > Manage deployments > Edit > Version: New version > Deploy.
  *
  * Kontrak API:
- *   GET  /exec  -> { status: "success", data: [ { rowIndex, orderId, namaMbp, ... } ], serverTime }
- *   POST /exec  -> body JSON { action: "updateStatus", orderId, namaMbp, ... }
+ *   GET  /exec  -> { status, data: [...], masterData?, serverTime }
+ *   POST /exec  -> { action: "updateStatus", ... } | { action: "saveMaster", masterData: {...} }
  *                  -> upsert baris berdasarkan orderId, lalu balas data terbaru
  *
  * Baris dengan orderId "-" adalah baris placeholder (unit standby) dan tidak
@@ -44,7 +44,10 @@ function getColumns() {
 }
 
 function doGet() {
-  return jsonOut({ status: 'success', data: readRows(), serverTime: new Date().toISOString() });
+  var master = readMasterJson();
+  var out = { status: 'success', data: readRows(), serverTime: new Date().toISOString() };
+  if (master) out.masterData = master;
+  return jsonOut(out);
 }
 
 function doPost(e) {
@@ -58,6 +61,8 @@ function doPost(e) {
   try {
     if (payload.action === 'updateStatus') {
       upsertRow(payload);
+    } else if (payload.action === 'saveMaster') {
+      saveMasterJson(payload.masterData);
     } else {
       return jsonOut({ status: 'error', message: 'Aksi tidak dikenal: ' + payload.action });
     }
@@ -65,7 +70,10 @@ function doPost(e) {
     return jsonOut({ status: 'error', message: 'Gagal menulis: ' + err.message });
   }
 
-  return jsonOut({ status: 'success', data: readRows(), serverTime: new Date().toISOString() });
+  var master = readMasterJson();
+  var out = { status: 'success', data: readRows(), serverTime: new Date().toISOString() };
+  if (master) out.masterData = master;
+  return jsonOut(out);
 }
 
 // ---------------------------------------------------------------- konfigurasi
@@ -78,6 +86,44 @@ function getSpreadsheetId() {
 
 function getSheetName() {
   return 'Sheet1';
+}
+
+function getMasterSheetName() {
+  return 'MasterData';
+}
+
+// ---------------------------------------------------------------- master JSON (personil / sites / units)
+
+function getOrCreateMasterSheet() {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var name = getMasterSheetName();
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange('A1').setValue('{}');
+    sheet.getRange('A2').setNote(
+      'Satu sel JSON: { personil:[], sites:[], units:[] }. Diisi otomatis dari halaman Admin web.'
+    );
+  }
+  return sheet;
+}
+
+function readMasterJson() {
+  var sheet = SpreadsheetApp.openById(getSpreadsheetId()).getSheetByName(getMasterSheetName());
+  if (!sheet) return null;
+  var raw = sheet.getRange('A1').getValue();
+  if (!raw) return null;
+  try {
+    return JSON.parse(String(raw));
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveMasterJson(obj) {
+  if (!obj || typeof obj !== 'object') throw new Error('masterData wajib objek JSON');
+  var sheet = getOrCreateMasterSheet();
+  sheet.getRange('A1').setValue(JSON.stringify(obj));
 }
 
 // ---------------------------------------------------------------- baca sheet
