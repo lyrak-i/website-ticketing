@@ -119,8 +119,9 @@ function saveMasterData() {
 // Nop aktif sebuah order: dari Site List dulu, fallback ke nop di record order
 function getOrderNop(order) {
   if (!order) return '';
-  const site = masterData.sites.find(s => s.siteId === (order.siteDestinasi || '').split(' ')[0]);
-  return site ? site.nop : (order.nop || '');
+  if (order.nop) return order.nop; // Utamakan NOP historis yang sudah terkunci
+  const site = masterData.sites.find(s => s.siteId === (order.siteDestinasi || '').split(' ')[0] || s.nama === order.siteDestinasi);
+  return site ? site.nop : '';
 }
 
 function siteNopOf(siteName) {
