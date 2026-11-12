@@ -3,11 +3,14 @@
  *
  * Deploy:
  *   1. Extensions > Apps Script >New project
- *   2. Tempel file ini (ganti SPREADSHEET_ID + nama tab)
+ *   2. Tempel SELURUH file ini (jangan dipotong)
  *   3. Deploy > New deployment > Web app
  *      - Execute as: Me
  *      - Who has access: Anyone
  *   4. Salin URL /exec ke js/config.js (DEFAULT_GAS_URL)
+ *   5. Kalau Sheet/tab berbeda, ubah getSpreadsheetId() dan getSheetName()
+ *
+ * Setiap perubahan kode: Deploy > Manage deployments > Edit > Version: New version > Deploy.
  *
  * Kontrak API:
  *   GET  /exec  -> { status: "success", data: [ { rowIndex, orderId, namaMbp, ... } ], serverTime }
@@ -18,28 +21,27 @@
  * pernah di-update lewat updateStatus.
  */
 
-var SPREADSHEET_ID = '1TihE0UILTdwP0bUXTu7K6ukbsGGhYFBFAfopYVzBl8Q';
-var SHEET_NAME = 'Sheet1';
-
 // Urutan kolom harus sama dengan header sheet.
-var COLUMNS = [
-  'orderId',
-  'namaMbp',
-  'noWa',
-  'siteDestinasi',
-  'linkMapsSite',
-  'prioritas',
-  'status',
-  'durasiIdleSebelumOrder',
-  'estimasiEta',
-  'selisihOtwEta',
-  'tsIdle',
-  'tsAccept',
-  'tsOtw',
-  'tsOnsite',
-  'tsSelesai',
-  'totalDurasi'
-];
+function getColumns() {
+  return [
+    'orderId',
+    'namaMbp',
+    'noWa',
+    'siteDestinasi',
+    'linkMapsSite',
+    'prioritas',
+    'status',
+    'durasiIdleSebelumOrder',
+    'estimasiEta',
+    'selisihOtwEta',
+    'tsIdle',
+    'tsAccept',
+    'tsOtw',
+    'tsOnsite',
+    'tsSelesai',
+    'totalDurasi'
+  ];
+}
 
 function doGet() {
   return jsonOut({ status: 'success', data: readRows(), serverTime: new Date().toISOString() });
@@ -66,12 +68,24 @@ function doPost(e) {
   return jsonOut({ status: 'success', data: readRows(), serverTime: new Date().toISOString() });
 }
 
+// ---------------------------------------------------------------- konfigurasi
+// Nilai dikunci di dalam fungsi supaya tetap jalan walau baris deklarasi
+// terpotong saat copy-paste ke editor Apps Script.
+
+function getSpreadsheetId() {
+  return '1TihE0UILTdwP0bUXTu7K6ukbsGGhYFBFAfopYVzBl8Q';
+}
+
+function getSheetName() {
+  return 'Sheet1';
+}
+
 // ---------------------------------------------------------------- baca sheet
 
 function getSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-  if (!sheet) throw new Error('Sheet "' + SHEET_NAME + '" tidak ditemukan');
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var sheet = ss.getSheetByName(getSheetName()) || ss.getSheets()[0];
+  if (!sheet) throw new Error('Sheet "' + getSheetName() + '" tidak ditemukan');
   return sheet;
 }
 
@@ -80,14 +94,15 @@ function readRows() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var values = sheet.getRange(2, 1, lastRow - 1, COLUMNS.length).getValues();
+  var columns = getColumns();
+  var values = sheet.getRange(2, 1, lastRow - 1, columns.length).getValues();
   var out = [];
 
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     var obj = { rowIndex: i + 2 };
-    for (var c = 0; c < COLUMNS.length; c++) {
-      obj[COLUMNS[c]] = cellToString(row[c]);
+    for (var c = 0; c < columns.length; c++) {
+      obj[columns[c]] = cellToString(row[c]);
     }
     if (!obj.orderId) continue;
     out.push(obj);
@@ -129,17 +144,18 @@ function upsertRow(payload) {
 
   // Kolom yang terisi dari payload (tidak menimpa nilai lama dengan kosong).
   var values = buildRow(payload, isNew);
+  var columns = getColumns();
 
   if (isNew) {
-    sheet.getRange(targetRow, 1, 1, COLUMNS.length).setValues([values]);
+    sheet.getRange(targetRow, 1, 1, columns.length).setValues([values]);
   } else {
-    var existing = sheet.getRange(targetRow, 1, 1, COLUMNS.length).getValues()[0];
+    var existing = sheet.getRange(targetRow, 1, 1, columns.length).getValues()[0];
     var merged = [];
-    for (var c = 0; c < COLUMNS.length; c++) {
+    for (var c = 0; c < columns.length; c++) {
       var incoming = values[c];
       merged.push(incoming === '' ? cellToString(existing[c]) : incoming);
     }
-    sheet.getRange(targetRow, 1, 1, COLUMNS.length).setValues([merged]);
+    sheet.getRange(targetRow, 1, 1, columns.length).setValues([merged]);
   }
 
   return targetRow;

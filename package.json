@@ -1,0 +1,24 @@
+{
+  "name": "ticket-monitor",
+  "version": "1.0.0",
+  "description": "website untuk meninjau tiket mbp",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i src/input.css -o css/app.css --minify",
+    "watch:css": "tailwindcss -i src/input.css -o css/app.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyrak-i/website-ticketing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lyrak-i/website-ticketing/issues"
+  },
+  "homepage": "https://github.com/lyrak-i/website-ticketing#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

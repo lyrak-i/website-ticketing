@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tema terang (default). Token dipakai Tailwind lewat rgb(var(--c-*) / <alpha-value>). */
+:root {
+  --c-surface: 255 255 255;
+  --c-surface-2: 248 250 252;
+  --c-surface-3: 241 245 249;
+  --c-line: 226 232 240;
+  --c-line-strong: 203 213 225;
+  --c-body: 15 23 42;
+  --c-muted: 71 85 105;
+  --c-faint: 100 116 139;
+}
+
+body {
+  background-color: rgb(var(--c-surface-2));
+  color: rgb(var(--c-body));
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Angka timer/ETA: lebar digit stabil supaya tidak "bergeser" tiap detik. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.status-btn:active {
+  transform: scale(0.98);
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.table-scroll::-webkit-scrollbar-track {
+  background: rgb(var(--c-surface-3));
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-line-strong));
+  border-radius: 4px;
+}
+
+/* Hormati pengaturan "kurangi animasi" di OS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

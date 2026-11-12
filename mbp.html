@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Tugas MBP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/app.css?v=20260311d" />
+</head>
+<body class="min-h-screen bg-surface-2 text-body antialiased">
+
+  <!-- HEADER: identitas unit + koneksi -->
+  <header class="sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-line">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold shrink-0">⚡</div>
+        <div class="min-w-0">
+          <p id="mobileUnitName" class="text-sm font-bold text-body truncate leading-tight">Memuat…</p>
+          <p id="mobileOrderId" class="text-[11px] font-mono text-faint truncate leading-tight">-</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <span id="mobilePriorityBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-surface-3 text-muted border border-line">Low</span>
+        <span id="connectionBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30 whitespace-nowrap">Demo</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ISI: tujuan + status + 1 tombol -->
+  <main class="max-w-md mx-auto px-4 py-5 pb-32 flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
+
+    <!-- Site tujuan -->
+    <section class="bg-surface border border-line rounded-2xl p-5 shadow-sm">
+      <p class="text-[11px] font-semibold uppercase tracking-wider text-faint">Site Tujuan</p>
+      <h1 id="mobileSiteDest" class="text-3xl sm:text-4xl font-bold text-body leading-tight mt-1 break-words">-</h1>
+      <p id="mobileEtaVal" class="text-sm font-mono text-amber-700 mt-2 tabular">-</p>
+    </section>
+
+    <!-- Status + timer (1 baris) -->
+    <section class="bg-surface border border-line rounded-2xl px-4 py-3 shadow-sm flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <span id="mobileCurrentStatusBadge"></span>
+      </div>
+      <div class="text-right shrink-0">
+        <span id="timerTitle" class="text-[10px] uppercase tracking-wider text-faint block">Durasi Idle (Siaga)</span>
+        <p id="mobileLiveTimer" class="text-lg font-bold text-body tabular leading-tight">00m 00s</p>
+      </div>
+    </section>
+
+    <!-- Catatan singkat:technisi cukup tahu kemana harus pergi -->
+    <p class="text-xs text-faint text-center px-4">
+      Ikuti instruksi di WhatsApp. Tekan tombol di bawah setiap kali status berubah.
+    </p>
+
+    <!-- Tombol aksi (sticky di bawah) -->
+    <div class="fixed bottom-0 left-0 right-0 z-30 bg-surface-2/95 backdrop-blur border-t border-line px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div class="max-w-md mx-auto">
+        <button onclick="handleMbpAction()" id="btnMbpAction" class="status-btn w-full py-4 px-5 rounded-2xl border-2 border-amber-500 bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 flex items-center justify-between transition-all">
+          <div class="flex items-center gap-3 text-left min-w-0">
+            <span class="text-2xl shrink-0">⚡</span>
+            <div class="min-w-0">
+              <p data-btn-label class="font-bold text-base leading-tight">Terima &amp; OTW</p>
+              <p data-btn-hint class="text-xs opacity-80 leading-tight">Ambil tiket &amp; berangkat ke site</p>
+            </div>
+          </div>
+        </button>
+        <p id="mobileSyncFeedback" class="hidden text-center text-xs font-medium text-emerald-600 mt-2">✓ Baris tersimpan</p>
+      </div>
+    </div>
+
+    <!-- Select unit (hanya mode demo; disembunyikan untuk sesi nyata) -->
+    <select id="mobileMbpSelect" onchange="handleMobileMbpSelectChange()" class="hidden"></select>
+  </main>
+
+  <!-- Overlay selesai: teknisi tidak bisa login manual, jadi tanpa form -->
+  <div id="loginScreen" class="fixed inset-0 z-[60] bg-surface-2 flex items-center justify-center p-4 hidden">
+    <div class="w-full max-w-sm bg-surface border border-line rounded-2xl p-6 text-center shadow-xl">
+      <div class="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-2xl mb-3">✓</div>
+      <h1 class="font-bold text-lg text-body">Tugas Selesai</h1>
+      <p id="loginError" class="text-sm text-muted mt-1"></p>
+      <p class="text-xs text-faint mt-4">Silakan tutup halaman ini.</p>
+    </div>
+  </div>
+
+  <script src="js/config.js?v=20260311d"></script>
+  <script src="js/auth.js?v=20260311d"></script>
+  <script src="js/app.js?v=20260311d"></script>
+</body>
+</html>
