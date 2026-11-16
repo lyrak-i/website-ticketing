@@ -217,8 +217,18 @@ test('authCanWriteOrder membatasi MBP pada order miliknya', () => {
     ]
   });
   const session = { role: 'mbp', orderId: 'ORD-1', namaMbp: 'MBP-01 (Tim Alpha)' };
-  assert.equal(api.authCanWriteOrder(session, { orderId: 'ORD-1' }).ok, true);
-  assert.equal(api.authCanWriteOrder(session, { orderId: 'ORD-2' }).ok, false);
+  assert.equal(api.authCanWriteOrder(session, { orderId: 'ORD-1', dispatchToken: 'abc123' }).ok, true);
+  assert.equal(api.authCanWriteOrder(session, { orderId: 'ORD-2', dispatchToken: 'def456' }).ok, false);
+});
+
+test('authCanWriteOrder menolak MBP yang memakai dispatch token orang lain', () => {
+  const { api } = makeAuth({
+    rows: [{ orderId: 'ORD-1', dispatchToken: 'abc123', namaMbp: 'MBP-01 (Tim Alpha)', status: 'Belum OTW' }]
+  });
+  const session = { role: 'mbp', orderId: 'ORD-1', namaMbp: 'MBP-01 (Tim Alpha)' };
+  const result = api.authCanWriteOrder(session, { orderId: 'ORD-1', dispatchToken: 'token-orang-lain' });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /token/i);
 });
 
 test('authCanWriteOrder mengizinkan admin tanpa scope', () => {

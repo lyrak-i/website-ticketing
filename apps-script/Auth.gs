@@ -136,6 +136,7 @@ function authCreateSession(user, extra) {
     unit: user.unit || '',
     orderId: extra.orderId || '',
     namaMbp: extra.namaMbp || '',
+    dispatchToken: user.dispatchToken || '',
     loginAt: Date.now()
   };
   var cache = CacheService.getScriptCache();
@@ -227,7 +228,7 @@ function authHandleValidateMagicLink(payload) {
   var row = findOrderRowById(orderId);
   if (!row) return { status: 'error', message: 'Tiket tidak ditemukan.' };
   var storedToken = String(row.dispatchToken || '').trim().toLowerCase();
-  if (!storedToken || !safeEquals(storedToken, token)) return { status: 'error', message: 'Token link tidak valid.' };
+  if (!storedToken || !safeEquals(storedToken, token)) return { status: 'error', message: 'Token link tidak valid atau tidak ada di tiket.' };
   if (row.namaMbp !== namaMbp) return { status: 'error', message: 'Link ini untuk unit MBP lain.' };
   var st = String(row.status || '').toLowerCase();
   if (st.indexOf('selesai') !== -1) {
@@ -239,7 +240,8 @@ function authHandleValidateMagicLink(payload) {
     role: 'mbp',
     name: row.namaMbp || namaMbp,
     nop: row.nop || '',
-    unit: row.namaMbp || namaMbp
+    unit: row.namaMbp || namaMbp,
+    dispatchToken: storedToken
   };
   var sess = authCreateSession(user, { orderId: orderId, namaMbp: row.namaMbp || namaMbp });
   return { status: 'success', sessionToken: sess.sessionToken, user: sess.user, backendVersion: AUTH_BACKEND_VERSION };
@@ -341,20 +343,26 @@ function authCanWriteOrder(session, payload) {
     }
     var orderNop = String(payload.nop || '').trim();
     if (!orderNop) {
-      var master = readMasterJson() || { sites: [] };
       var siteId = String(payload.siteDestinasi || '').split(' ')[0];
       var site = (master.sites || []).find(function (s) { return s.siteId === siteId || s.nama === payload.siteDestinasi; });
       orderNop = site ? String(site.nop || '') : '';
     }
-    return orderNop && orderNop === session.nop
-      ? { ok: true }
-      : { ok: false, message: 'OMC hanya boleh mengubah tiket untuk NOP akunnya.' };
+    if (orderNop !== session.nop) return { ok: false, message: 'OMC hanya boleh mengubah tiket untuk NOP akunnya.' };
+    var orderId = String(payload.orderId || '').trim();
+    if (orderId && orderId !== '-') {
+      var existing = findOrderRowById(orderId);
+      if (existing && existing.nop && existing.nop !== session.nop) return { ok: false, message: 'Tiket berada di NOP lain.' };
+    }
+    return { ok: true };
   }
   if (session.role === 'mbp') {
     var oid = String(payload.orderId || '').trim();
     var row = findOrderRowById(oid);
     if (!oid || oid !== String(session.orderId || '').trim() || !row || row.namaMbp !== session.namaMbp) {
       return { ok: false, message: 'MBP hanya boleh mengubah tiket dari link mereka.' };
+    }
+    if (!safeEquals(String(row.dispatchToken || '').trim().toLowerCase(), String(payload.dispatchToken || '').trim().toLowerCase())) {
+      return { ok: false, message: 'Dispatch token tidak valid.' };
     }
     return { ok: true };
   }

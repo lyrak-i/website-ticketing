@@ -345,42 +345,72 @@ const BTN_CLS = {
 };
 
 function initApp() {
-  // 1. Pasang interval timer langsung di awal
   setInterval(tickTimers, 1000);
-
-  // 2. Load data local aman
-  try {
-    const savedFleet = localStorage.getItem(STORAGE_KEY_FLEET);
-    fleetList = savedFleet ? JSON.parse(savedFleet) : getSeedFleet();
-    if (!Array.isArray(fleetList) || fleetList.length === 0) fleetList = getSeedFleet();
-
-    const savedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
-    orderList = savedOrders ? JSON.parse(savedOrders) : [];
-    if (!Array.isArray(orderList)) orderList = [];
-  } catch (err) {
+  const hasMagicLink = typeof HAS_MAGIC_LINK !== 'undefined' && HAS_MAGIC_LINK;
+  const savedSession = typeof readSession === 'function' ? readSession() : null;
+  const isMbpSession = savedSession?.role === 'mbp';
+  if (hasMagicLink) {
     fleetList = getSeedFleet();
     orderList = [];
+  } else if (isMbpSession && mbpRuntimeState) {
+    fleetList = JSON.parse(sessionStorage.getItem(STORAGE_KEY_FLEET) || '[]');
+    orderList = JSON.parse(sessionStorage.getItem(STORAGE_KEY_ORDERS) || '[]');
+  } else if (isMbpSession) {
+    fleetList = getSeedFleet();
+    orderList = [];
+  } else {
+    try {
+      const savedFleet = localStorage.getItem(STORAGE_KEY_FLEET);
+      fleetList = savedFleet ? JSON.parse(savedFleet) : getSeedFleet();
+      if (!Array.isArray(fleetList) || fleetList.length === 0) fleetList = getSeedFleet();
+      const savedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
+      orderList = savedOrders ? JSON.parse(savedOrders) : [];
+      if (!Array.isArray(orderList)) orderList = [];
+    } catch (err) {
+      fleetList = getSeedFleet();
+      orderList = [];
+    }
   }
 
-  // 2b. Normalisasi status lama (label Sheets) -> kunci kanonik
   fleetList.forEach(u => { u.status = statusKey(u.status); });
   orderList.forEach(o => { o.status = statusKey(o.status); });
-
-  selectedMobileMbp = fleetList[0]?.namaMbp || 'MBP-01 (Tim Alpha)';
-
-  syncFleetFromMaster();
+  selectedMobileMbp = savedSession?.role === 'mbp' ? savedSession.unit : (fleetList[0]?.namaMbp || '');
+  if (!isMbpSession && !hasMagicLink) syncFleetFromMaster();
   updateConnectionBadge();
   populateSelectDropdowns();
-  generateNewOrderId();
+  if (document.getElementById('dispatchOrderId')) generateNewOrderId();
   renderAdminTables();
-
   refreshNopFilterUi();
+
+  if (hasMagicLink) {
+    setInterval(tickTimers, 1000);
+    Promise.resolve().then(() => tryMagicLinkAuth()).catch(err => {
+      document.getElementById('loginScreen')?.classList.remove('hidden');
+      document.getElementById('loginScreen')?.classList.add('flex');
+      showLoginError(err.message || 'Gagal membuka link tugas.');
+    });
+    return;
+  } else if (savedSession?.role === 'mbp') {
+    Promise.resolve().then(async () => {
+      const result = await gasPost({ action: 'validateSession', sessionToken: savedSession.sessionToken }, { auth: false });
+      if (result.status !== 'success') return logout();
+      const user = { ...result.user, sessionToken: savedSession.sessionToken, dispatchToken: savedSession.dispatchToken || '' };
+      applyUser(user);
+      await syncFromServer(false);
+      renderAll();
+    });
+  } else if (savedSession) {
+    Promise.resolve().then(() => initAuth());
+  } else if (!hasMagicLink) {
+    renderAll();
+  }
 
   async function runSync() {
     if (gasWebAppUrl && readSession()) await syncFromServer(false);
   }
   runSync();
   setInterval(runSync, 10000);
+  if (typeof checkMbpSessionExpiry === 'function') setInterval(checkMbpSessionExpiry, 5000);
 }
 
 window.addEventListener('storage', (e) => {
@@ -508,6 +538,57 @@ function updateWaPreview() {
 }
 
 async function handleDispatchClick(event) {
+  const dispatchButton = event.currentTarget;
+  const finishDispatch = () => {
+    if (dispatchButton) {
+      dispatchButton.removeAttribute('data-dispatching');
+      dispatchButton.removeAttribute('aria-busy');
+    }
+  };
+  if (dispatchButton?.dataset.dispatching === 'true') {
+    event.preventDefault();
+    return;
+  }
+  if (dispatchButton) dispatchButton.dataset.dispatching = 'true';
+  dispatchButton?.setAttribute('aria-busy', 'true');
+  try {
+    await dispatchTicket(event);
+  } finally {
+    finishDispatch();
+  }
+}
+
+function clearPendingDispatch(unit) {
+  unit.status = 'idle';
+  unit.activeOrderId = '-';
+  unit.activeSite = '-';
+  unit.activePriority = 'Low';
+  unit.estimasiEta = '-';
+  unit.selisihOtwEta = '-';
+  unit.pendingOrder = null;
+  saveAndBroadcast();
+}
+
+function showSyncError(message) {
+  const syncText = document.getElementById('lastSyncText');
+  if (syncText) syncText.textContent = 'Sync gagal: ' + message;
+  const feedback = document.getElementById('mobileSyncFeedback');
+  if (feedback) {
+    feedback.textContent = message;
+    feedback.classList.remove('hidden', 'text-emerald-700');
+    feedback.classList.add('text-rose-700');
+  }
+}
+
+async function dispatchTicket(event) {
+  const dispatchButton = event.currentTarget;
+  const waHref = dispatchButton?.href || '';
+  const selectedUnit = fleetList.find(m => m.namaMbp === document.getElementById('dispatchMbpSelect')?.value);
+  if (selectedUnit && statusKey(selectedUnit.status) !== 'idle') {
+    event.preventDefault();
+    alert('Unit MBP sedang memegang tiket aktif. Pilih unit lain atau selesaikan tiket sebelumnya.');
+    return;
+  }
   let orderId = document.getElementById('dispatchOrderId')?.value;
   if (!orderId || orderId === '-') {
     orderId = generateNewOrderId();
@@ -558,6 +639,7 @@ async function handleDispatchClick(event) {
     nop: siteNopOf(siteDest),
     dispatchedAt: nowIso
   };
+  if (currentUser?.role === 'mbp') mbpRuntimeState = { ...mbpRuntimeState, orderId, dispatchToken: currentDispatchToken };
   unit.status = 'belum_otw';
   unit.activeOrderId = orderId;
   unit.activeSite = siteDest;
@@ -574,32 +656,34 @@ async function handleDispatchClick(event) {
       action: 'updateStatus',
       orderId,
       dispatchToken: currentDispatchToken,
-        namaMbp: unit.namaMbp,
-        noWa: rawWa,
-        siteDestinasi: siteDest,
-        linkMapsSite,
-        prioritas,
-        nop: siteNopOf(siteDest),
-        newStatus: STATUS_LABEL.belum_otw,
-        durasiIdleSebelumOrder: formatDurationMs(Math.max(0, idleMs)),
-        estimasiEta: '-',
-        selisihOtwEta: '-',
-        tsIdle: unit.tsIdleStart || '',
-        tsAccept: nowIso,
+      namaMbp: unit.namaMbp,
+      noWa: rawWa,
+      siteDestinasi: siteDest,
+      linkMapsSite,
+      prioritas,
+      nop: siteNopOf(siteDest),
+      newStatus: STATUS_LABEL.belum_otw,
+      durasiIdleSebelumOrder: formatDurationMs(Math.max(0, idleMs)),
+      estimasiEta: '-',
+      selisihOtwEta: '-',
+      tsIdle: unit.tsIdleStart || '',
+      tsAccept: nowIso,
       totalDurasi: 'Idle Sebelum Order: ' + formatDurationMs(Math.max(0, idleMs)),
       timestamp: nowIso
     });
     if (response.status !== 'success') {
-      unit.status = 'idle';
-      unit.activeOrderId = '-';
-      unit.activeSite = '-';
-      unit.pendingOrder = null;
-      saveAndBroadcast();
+      clearPendingDispatch(unit);
       event.preventDefault();
       return;
     }
+  } else {
+    resetPendingDispatch(unit);
+    event.preventDefault();
+    showSyncError('Backend tidak tersedia. Link MBP tidak dikirim karena token belum tersimpan.');
+    return;
   }
 
+  if (dispatchButton && waHref) window.open(waHref, '_blank', 'noopener');
   setTimeout(() => {
     generateNewOrderId();
     updateWaLink();
@@ -616,7 +700,9 @@ async function handleDispatchClick(event) {
 let statusBusy = false;
 
 async function handleMbpAction() {
-  const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp);
+  const unit = currentUser?.role === 'mbp'
+    ? fleetList.find(m => m.namaMbp === currentUser.unit || m.id === currentUser.unit)
+    : fleetList.find(m => m.namaMbp === selectedMobileMbp);
   if (!unit || statusBusy) return;
 
   const from = statusKey(unit.status);
@@ -648,6 +734,7 @@ function buildOrderPayload(unit, order, newStatus, timestamp) {
     siteDestinasi: o.siteDestinasi || unit.activeSite || '',
     linkMapsSite: o.linkMapsSite || unit.activeMapsLink || '',
     prioritas: o.prioritas || unit.activePriority || 'Low',
+    dispatchToken: o.dispatchToken || unit.pendingOrder?.token || mbpRuntimeState?.dispatchToken || '',
     newStatus,
     durasiIdleSebelumOrder: o.durasiIdleSebelumOrder || unit.activeIdleDuration || '-',
     estimasiEta: o.estimasiEta || unit.estimasiEta || '-',
@@ -679,13 +766,16 @@ async function beginJob(unit) {
 
   const orderToAccept = unit.pendingOrder;
   if (!orderToAccept) {
-    // Cek jika order sebenarnya sudah masuk dari hasil sync Sheets
     const activeFromSheet = orderList.find(o => o.namaMbp === unit.namaMbp && statusKey(o.status) !== 'selesai');
     if (activeFromSheet) {
       renderAll();
       return;
     }
     alert('Belum ada tiket masuk. Buka melalui link tugas WhatsApp dari OMC.');
+    return;
+  }
+  if (orderToAccept.orderId !== currentUser?.orderId || !orderToAccept.token || orderToAccept.token !== currentUser?.dispatchToken) {
+    alert('Link ini tidak berlaku untuk tiket yang sedang dibuka. Buka kembali link WhatsApp terbaru.');
     return;
   }
 
@@ -928,8 +1018,18 @@ function showFeedback() {
 }
 
 function saveAndBroadcast() {
-  localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
-  localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
+  const isMbpSession = currentUser?.role === 'mbp';
+  if (isMbpSession) {
+    mbpRuntimeState = {
+      role: 'mbp', unit: currentUser.unit, orderId: currentUser.orderId,
+      dispatchToken: currentUser.dispatchToken || '', sessionToken: currentUser.sessionToken
+    };
+    sessionStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
+    sessionStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
+  } else {
+    localStorage.setItem(STORAGE_KEY_FLEET, JSON.stringify(fleetList));
+    localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
+  }
   populateSelectDropdowns();
   renderAll();
   const syncText = document.getElementById('lastSyncText');
@@ -1061,7 +1161,8 @@ function fleetApprovalCellHtml(unit) {
 }
 
 function renderMobileView() {
-  const unit = fleetList.find(m => m.namaMbp === selectedMobileMbp) || fleetList[0];
+  if (currentUser?.role !== 'mbp') return;
+  const unit = fleetList.find(m => m.namaMbp === currentUser.unit || m.id === currentUser.unit);
   if (!unit) return;
 
   const orderIdEl = document.getElementById('mobileOrderId');
@@ -1217,7 +1318,31 @@ function applyServerPayload(json) {
     return false;
   }
   const rows = json.data.filter(r => r.orderId && r.orderId !== '-');
-  applySheetRecords(rows);
+  if (currentUser?.role === 'mbp') {
+    const row = rows.find(item => item.orderId === currentUser.orderId);
+    if (row && statusKey(row.status) === 'selesai') {
+      orderList = [row];
+      applySheetRecords([row]);
+    } else if (row) {
+      orderList = [row];
+      const unit = fleetList.find(item => item.namaMbp === currentUser.unit || item.id === currentUser.unit);
+      if (unit) {
+        unit.status = statusKey(row.status);
+        unit.activeOrderId = row.orderId;
+        unit.activeSite = row.siteDestinasi;
+        unit.activePriority = row.prioritas;
+        unit.estimasiEta = row.estimasiEta || '-';
+        unit.selisihOtwEta = row.selisihOtwEta || '-';
+        unit.pendingOrder = statusKey(row.status) === 'belum_otw' ? {
+          orderId: row.orderId, token: row.dispatchToken || currentUser.dispatchToken || '',
+          siteDestinasi: row.siteDestinasi, linkMapsSite: row.linkMapsSite || '#',
+          prioritas: row.prioritas, nop: row.nop || '', dispatchedAt: row.tsAccept || new Date().toISOString()
+        } : null;
+      }
+    }
+  } else {
+    applySheetRecords(rows);
+  }
   applyMasterResponse(json);
   renderAll();
   const syncText = document.getElementById('lastSyncText');
@@ -1243,12 +1368,18 @@ function getGasSessionToken() {
   return typeof readSession === 'function' ? readSession()?.sessionToken || '' : '';
 }
 
+function getApiSessionToken() {
+  return currentUser?.role === 'mbp'
+    ? mbpRuntimeState?.sessionToken || currentUser.sessionToken || ''
+    : getGasSessionToken();
+}
+
 async function gasPost(payload, { auth = true } = {}) {
   if (!gasWebAppUrl) return { status: 'error', message: 'URL Apps Script belum diatur.' };
   const body = { ...payload };
   if (body.action === 'updateStatus' && !body.nop) body.nop = siteNopOf(body.siteDestinasi);
   if (auth) {
-    body.sessionToken = getGasSessionToken();
+    body.sessionToken = getApiSessionToken();
     if (!body.sessionToken) return { status: 'error', message: 'Sesi habis. Login ulang.' };
   }
   try {
@@ -1275,7 +1406,24 @@ window.gasPost = gasPost;
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');
   if (!gasWebAppUrl || isSyncing) return;
-  const sessionToken = getGasSessionToken();
+  if (currentUser?.role === 'mbp') {
+    const sessionToken = getApiSessionToken();
+    if (!sessionToken) return;
+    isSyncing = true;
+    try {
+      const json = await gasPost({ action: 'read' });
+      if (json.status !== 'success') return;
+      const accepted = applyServerPayload(json);
+      if (accepted && typeof saveAndBroadcast === 'function') saveAndBroadcast();
+      if (showSpinner && accepted && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
+    } catch (err) {
+      notifySyncError(err.message || String(err));
+    } finally {
+      isSyncing = false;
+    }
+    return;
+  }
+  const sessionToken = getApiSessionToken();
   if (!sessionToken) return;
   isSyncing = true;
   try {
@@ -1760,13 +1908,14 @@ function saveGasUrl() {
 }
 
 function resetDemoData() {
+  if (currentUser?.role !== 'admin') return;
   if (!confirm('Reset data lokal armada dan riwayat? Data di server tidak dihapus.')) return;
   localStorage.removeItem(STORAGE_KEY_FLEET);
   localStorage.removeItem(STORAGE_KEY_ORDERS);
   fleetList = getSeedFleet();
   orderList = [];
   saveAndBroadcast();
-  renderAll();
+  toggleConfigModal();
 }
 
 if (document.readyState === 'loading') {
