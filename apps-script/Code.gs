@@ -1,322 +1,232 @@
 /**
- * Backend MBP Command & Field Monitor (Google Apps Script Web App)
- *
- * Deploy:
- *   1. Extensions > Apps Script
- *   2. Tempel SELURUH file ini ke Code.gs (jangan dipotong)
- *   3. Deploy > Manage deployments > Edit > Version: New version > Deploy
- *
- * Kontrak API:
- *   GET  /exec  -> { status: "success", data: [...], masterData: {...}, serverTime }
- *   POST /exec  -> body JSON { action: "updateStatus", ... } ATAU { action: "saveMaster", masterData: {...} }
+ * Backend MBP Command & Field Monitor (Google Apps Script Web App).
+ * Deploy Code.gs, Auth.gs, and Crypto.gs together as a new web-app version.
  */
 
-// Urutan kolom harus sama dengan header sheet MBP_Monitoring (A1:P1).
 function getColumns() {
   return [
-    'orderId',
-    'namaMbp',
-    'noWa',
-    'siteDestinasi',
-    'linkMapsSite',
-    'prioritas',
-    'status',
-    'durasiIdleSebelumOrder',
-    'estimasiEta',
-    'selisihOtwEta',
-    'tsIdle',
-    'tsAccept',
-    'tsOtw',
-    'tsOnsite',
-    'tsSelesai',
-    'totalDurasi',
-    'nop', // Kolom Q: Pengunci NOP historis
-    'dispatchToken' // Kolom R: token magic link (hanya OMC yang tahu saat dispatch)
+    'orderId', 'namaMbp', 'noWa', 'siteDestinasi', 'linkMapsSite', 'prioritas',
+    'status', 'durasiIdleSebelumOrder', 'estimasiEta', 'selisihOtwEta',
+    'tsIdle', 'tsAccept', 'tsOtw', 'tsOnsite', 'tsSelesai', 'totalDurasi',
+    'nop', 'dispatchToken'
   ];
 }
 
 function doGet() {
-  return jsonOut({
-    status: 'success',
-    data: readRows(),
-    masterData: readMasterData(),
-    serverTime: new Date().toISOString(),
-    backendVersion: typeof authBackendVersion === 'function' ? authBackendVersion() : 1
-  });
+  return jsonOut({ status: 'error', message: 'Gunakan POST dan login untuk mengakses data.', backendVersion: authBackendVersion() });
 }
 
 function doPost(e) {
-  var payload = {};
+  var payload;
   try {
     payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
   } catch (err) {
-    return jsonOut({ status: 'error', message: 'Body harus JSON: ' + err.message });
-  }
-
-  var action = String(payload.action || '');
-
-  if (action === 'login') return jsonOut(authHandleLogin(payload));
-  if (action === 'logout') return jsonOut(authHandleLogout(payload));
-  if (action === 'validateMagicLink') return jsonOut(authHandleValidateMagicLink(payload));
-  if (action === 'listUsers') return jsonOut(authHandleListUsers(payload));
-  if (action === 'setPassword') return jsonOut(authHandleSetPassword(payload));
-
-  var auth = authRequire(payload);
-  if (!auth.ok) {
-    return jsonOut({ status: 'error', message: auth.message });
+    return jsonOut({ status: 'error', message: 'Body harus JSON.' });
   }
 
   try {
+    var action = String(payload.action || '');
+    if (action === 'login') return jsonOut(authHandleLogin(payload));
+    if (action === 'validateMagicLink') return jsonOut(authHandleValidateMagicLink(payload));
+    if (action === 'logout') return jsonOut(authHandleLogout(payload));
+    if (action === 'validateSession') return jsonOut(authHandleValidateSession(payload));
+    if (action === 'listUsers') return jsonOut(authHandleListUsers(payload));
+    if (action === 'setPassword') return jsonOut(authHandleSetPassword(payload));
+
+    var auth = authRequire(payload);
+    if (!auth.ok) return jsonOut({ status: 'error', message: auth.message });
+
+    if (action === 'read') {
+      var records = readRows();
+      if (auth.session.role === 'omc') {
+        var masterForNop = readMasterJson() || { sites: [] };
+        records = records.filter(function (row) {
+          if (row.nop) return row.nop === auth.session.nop;
+          var siteId = String(row.siteDestinasi || '').split(' ')[0];
+          var site = (masterForNop.sites || []).find(function (item) { return item.siteId === siteId || item.nama === row.siteDestinasi; });
+          return site && String(site.nop || '') === auth.session.nop;
+        });
+      } else if (auth.session.role === 'mbp') {
+        records = records.filter(function (row) { return row.orderId === auth.session.orderId; });
+      } else if (auth.session.role !== 'admin') {
+        return jsonOut({ status: 'error', message: 'Role tidak diizinkan membaca data.' });
+      }
+      var out = { status: 'success', data: records, serverTime: new Date().toISOString(), backendVersion: authBackendVersion() };
+      if (auth.session.role === 'admin') out.masterData = readMasterJson();
+      return jsonOut(out);
+    }
+
+    if (action === 'saveMaster') {
+      if (auth.session.role !== 'admin') return jsonOut({ status: 'error', message: 'Hanya Admin yang boleh menyimpan master data.' });
+      saveMasterJson(payload.masterData);
+      authSyncPersonilFromMaster(payload.masterData);
+      return jsonOut({ status: 'success', masterData: readMasterJson(), serverTime: new Date().toISOString(), backendVersion: authBackendVersion() });
+    }
+
     if (action === 'updateStatus') {
       var can = authCanWriteOrder(auth.session, payload);
       if (!can.ok) return jsonOut({ status: 'error', message: can.message });
-      upsertRow(payload);
-    } else if (action === 'saveMaster' && payload.masterData) {
-      if (auth.session.role !== 'admin') {
-        return jsonOut({ status: 'error', message: 'Hanya Admin yang boleh menyimpan master data.' });
+      if (auth.session.role === 'omc' && payload.orderId) {
+        var existing = findOrderRowById(payload.orderId);
+        if (existing && existing.nop && existing.nop !== auth.session.nop) return jsonOut({ status: 'error', message: 'Tiket berada di NOP lain.' });
       }
-      writeMasterData(payload.masterData);
-      authSyncPersonilFromMaster(payload.masterData);
-    } else {
-      return jsonOut({ status: 'error', message: 'Aksi tidak dikenal: ' + action });
+      upsertRow(payload);
+      var savedRows = readRows();
+      if (auth.session.role === 'omc') savedRows = savedRows.filter(function (row) { return row.nop === auth.session.nop; });
+      if (auth.session.role === 'mbp') savedRows = savedRows.filter(function (row) { return row.orderId === auth.session.orderId; });
+      return jsonOut({ status: 'success', data: savedRows, serverTime: new Date().toISOString(), backendVersion: authBackendVersion() });
     }
+    return jsonOut({ status: 'error', message: 'Aksi tidak dikenal: ' + action });
   } catch (err) {
-    return jsonOut({ status: 'error', message: 'Gagal menulis: ' + err.message });
+    return jsonOut({ status: 'error', message: 'Permintaan gagal: ' + err.message });
   }
-
-  return jsonOut({
-    status: 'success',
-    data: readRows(),
-    masterData: readMasterData(),
-    serverTime: new Date().toISOString(),
-    backendVersion: authBackendVersion()
-  });
 }
 
-// ---------------------------------------------------------------- konfigurasi
-
-function getSheetName() {
-  return 'MBP_Monitoring';
+function getSpreadsheetId() {
+  return '1TihE0UILTdwP0bUXTu7K6ukbsGGhYFBFAfopYVzBl8Q';
 }
 
-function getMasterSheetName() {
-  return 'Master_Data';
-}
+function getSheetName() { return 'Sheet1'; }
+function getMasterSheetName() { return 'MasterData'; }
 
 function getSpreadsheet() {
-  // Gunakan active spreadsheet jika script terikat langsung ke Sheet,
-  // atau fallback ke openById jika dijalankan terpisah.
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (ss) return ss;
-  throw new Error('Spreadsheet tidak ditemukan. Pastikan script dibuat dari menu Extensions > Apps Script di dalam Google Sheet Anda.');
+  return SpreadsheetApp.openById(getSpreadsheetId());
 }
 
-// ---------------------------------------------------------------- baca/tulis MBP_Monitoring
-
 function getSheet() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName(getSheetName()) || ss.getSheets()[0];
-  if (!sheet) throw new Error('Sheet "' + getSheetName() + '" tidak ditemukan');
+  var sheet = getSpreadsheet().getSheetByName(getSheetName());
+  if (!sheet) throw new Error('Tab "' + getSheetName() + '" tidak ditemukan.');
+  ensureTicketHeaders(sheet);
   return sheet;
+}
+
+function ensureTicketHeaders(sheet) {
+  var columns = getColumns();
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+    return;
+  }
+  var existing = sheet.getRange(1, 1, 1, 18).getValues()[0];
+  var expected = columns.slice(0, 16);
+  if (expected.some(function (name, i) { return String(existing[i] || '').trim() !== name; })) {
+    throw new Error('Header A:P tidak sesuai. Backup Sheet1 dan periksa urutan kolom sebelum deploy.');
+  }
+  if (String(existing[16] || '').trim() && String(existing[16]).trim() !== 'nop') throw new Error('Kolom Q sudah terpakai; backup sheet dan pindahkan field sebelum deploy.');
+  if (String(existing[17] || '').trim() && String(existing[17]).trim() !== 'dispatchToken') throw new Error('Kolom R sudah terpakai; backup sheet dan pindahkan field sebelum deploy.');
+  if (String(existing[16] || '').trim() !== 'nop') sheet.getRange(1, 17).setValue('nop');
+  if (String(existing[17] || '').trim() !== 'dispatchToken') sheet.getRange(1, 18).setValue('dispatchToken');
+}
+
+function getOrCreateMasterSheet() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(getMasterSheetName());
+  if (!sheet) {
+    sheet = ss.insertSheet(getMasterSheetName());
+    sheet.getRange('A1').setValue('{"personil":[],"sites":[],"units":[]}');
+    sheet.getRange('A2').setNote('Satu sel JSON. Dikelola lewat dashboard Admin.');
+  }
+  return sheet;
+}
+
+function readMasterJson() {
+  var sheet = getSpreadsheet().getSheetByName(getMasterSheetName());
+  if (!sheet) return null;
+  var raw = sheet.getRange('A1').getValue();
+  if (!raw) return null;
+  try { return JSON.parse(String(raw)); } catch (err) { throw new Error('JSON MasterData!A1 tidak valid.'); }
+}
+
+function saveMasterJson(obj) {
+  if (!obj || !Array.isArray(obj.personil) || !Array.isArray(obj.sites) || !Array.isArray(obj.units)) {
+    throw new Error('masterData harus berisi personil, sites, dan units berupa array.');
+  }
+  getOrCreateMasterSheet().getRange('A1').setValue(JSON.stringify(obj));
 }
 
 function readRows() {
   var sheet = getSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-
   var columns = getColumns();
   var values = sheet.getRange(2, 1, lastRow - 1, columns.length).getValues();
   var out = [];
-
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     var obj = { rowIndex: i + 2 };
-    for (var c = 0; c < columns.length; c++) {
-      obj[columns[c]] = cellToString(row[c]);
-    }
-    if (!obj.orderId) continue;
-    out.push(obj);
+    for (var c = 0; c < columns.length; c++) obj[columns[c]] = cellToString(row[c]);
+    if (obj.orderId) out.push(obj);
   }
   return out;
 }
 
-function cellToString(v) {
-  if (v === null || v === undefined) return '';
-  if (v instanceof Date) return v.toISOString();
-  return String(v);
+function findOrderRowById(orderId) {
+  orderId = String(orderId || '').trim();
+  var rows = readRows();
+  for (var i = 0; i < rows.length; i++) if (rows[i].orderId === orderId) return rows[i];
+  return null;
 }
 
-function findOrderRowById(orderId) {
-  var id = String(orderId || '').trim();
-  if (!id) return null;
-  var rows = readRows();
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].orderId || '').trim() === id) return rows[i];
-  }
-  return null;
+function cellToString(value) {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
 }
 
 function upsertRow(payload) {
   var orderId = String(payload.orderId || '').trim();
-  if (!orderId || orderId === '-') {
-    throw new Error('orderId wajib diisi (tidak boleh "-")');
-  }
-
-  var sheet = getSheet();
-  var lastRow = sheet.getLastRow();
-
-  // Cari baris dengan orderId yang sama -> update; kalau tidak ada -> append.
-  var targetRow = -1;
-  if (lastRow >= 2) {
-    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < ids.length; i++) {
-      if (String(ids[i][0]).trim() === orderId) {
-        targetRow = i + 2;
-        break;
+  if (!orderId || orderId === '-') throw new Error('orderId wajib diisi dan tidak boleh "-".');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = getSheet();
+    var lastRow = sheet.getLastRow();
+    var targetRow = -1;
+    if (lastRow >= 2) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === orderId) { targetRow = i + 2; break; }
       }
     }
-  }
-
-  var isNew = targetRow === -1;
-  if (isNew) targetRow = lastRow + 1;
-
-  // Kolom yang terisi dari payload (tidak menimpa nilai lama dengan kosong).
-  var values = buildRow(payload, isNew);
-  var columns = getColumns();
-
-  if (isNew) {
-    sheet.getRange(targetRow, 1, 1, columns.length).setValues([values]);
-  } else {
-    var existing = sheet.getRange(targetRow, 1, 1, columns.length).getValues()[0];
-    var merged = [];
-    for (var c = 0; c < columns.length; c++) {
-      var incoming = values[c];
-      merged.push(incoming === '' ? cellToString(existing[c]) : incoming);
+    var isNew = targetRow === -1;
+    if (isNew) targetRow = lastRow + 1;
+    var values = buildRow(payload, isNew);
+    var columns = getColumns();
+    if (isNew) {
+      sheet.getRange(targetRow, 1, 1, columns.length).setValues([values]);
+    } else {
+      var existing = sheet.getRange(targetRow, 1, 1, columns.length).getValues()[0];
+      var merged = values.map(function (incoming, index) {
+        return incoming === '' ? cellToString(existing[index]) : incoming;
+      });
+      sheet.getRange(targetRow, 1, 1, columns.length).setValues([merged]);
     }
-    sheet.getRange(targetRow, 1, 1, columns.length).setValues([merged]);
+    return targetRow;
+  } finally {
+    lock.releaseLock();
   }
-
-  return targetRow;
 }
 
 function buildRow(payload, isNew) {
   var now = new Date().toISOString();
-  var row = [];
-
-  // orderId
-  row.push(String(payload.orderId));
-
-  // namaMbp, noWa, siteDestinasi, linkMapsSite, prioritas
-  row.push(str(payload.namaMbp));
-  row.push(str(payload.noWa));
-  row.push(str(payload.siteDestinasi));
-  row.push(str(payload.linkMapsSite));
-  row.push(str(payload.prioritas));
-
-  // status: label dari client (mis. "Belum OTW"), atau kunci canonical
   var status = str(payload.newStatus) || str(payload.status) || 'Belum OTW';
-  row.push(status);
-
-  // durasiIdleSebelumOrder
-  row.push(str(payload.durasiIdleSebelumOrder) || (isNew ? '-' : ''));
-
-  // estimasiEta, selisihOtwEta
-  row.push(str(payload.estimasiEta) || (isNew ? '-' : ''));
-  row.push(str(payload.selisihOtwEta) || (isNew ? '-' : ''));
-
-  // timestamp idle
-  row.push(str(payload.tsIdle) || str(payload.lastIdleTimestamp) || '');
-
-  // timestamp Belum OTW (dispatch OMC)
-  row.push(str(payload.tsAccept) || (isNew ? now : ''));
-
-  // timestamp OTW: diisi saat status jadi "OTW to Site"
-  var isOtw = /^otw/i.test(status);
-  row.push(isOtw ? (str(payload.tsOtw) || now) : (str(payload.tsOtw) || ''));
-
-  // timestamp onsite / selesai
-  row.push(str(payload.tsOnsite) || '');
-  row.push(str(payload.tsSelesai) || '');
-
-  // totalDurasi
-  row.push(str(payload.totalDurasi) || (isNew ? 'Menunggu MBP Accept' : ''));
-
-  row.push(str(payload.nop) || '');
-  row.push(str(payload.dispatchToken) || '');
-
-  return row;
+  return [
+    String(payload.orderId), str(payload.namaMbp), str(payload.noWa), str(payload.siteDestinasi),
+    str(payload.linkMapsSite), str(payload.prioritas), status,
+    str(payload.durasiIdleSebelumOrder) || (isNew ? '-' : ''),
+    str(payload.estimasiEta) || (isNew ? '-' : ''), str(payload.selisihOtwEta) || (isNew ? '-' : ''),
+    str(payload.tsIdle) || str(payload.lastIdleTimestamp) || '',
+    str(payload.tsAccept) || (isNew ? now : ''),
+    /^otw/i.test(status) ? (str(payload.tsOtw) || now) : str(payload.tsOtw),
+    str(payload.tsOnsite), str(payload.tsSelesai),
+    str(payload.totalDurasi) || (isNew ? 'Menunggu MBP Accept' : ''),
+    str(payload.nop), str(payload.dispatchToken)
+  ];
 }
 
-// ---------------------------------------------------------------- baca/tulis Master_Data
-// ponytail: full-overwrite seluruh tab Master_Data setiap kali Admin klik Simpan, upgrade when: total baris master data > 1.000 baris
-
-function readMasterData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName(getMasterSheetName());
-  if (!sheet || sheet.getLastRow() < 2) return null;
-
-  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
-  var out = { personil: [], units: [], sites: [] };
-
-  for (var i = 0; i < rows.length; i++) {
-    var kat = String(rows[i][0]).trim().toLowerCase();
-    var id = String(rows[i][1]).trim();
-    var nama = String(rows[i][2]).trim();
-    var nop = String(rows[i][3]).trim();
-    var noWa = String(rows[i][4]).trim();
-    if (!id) continue;
-
-    if (kat === 'personil') {
-      out.personil.push({ id: id, nama: nama, nop: nop });
-    } else if (kat === 'units') {
-      out.units.push({ id: id, nama: nama, nop: nop, noWa: noWa });
-    } else if (kat === 'sites') {
-      out.sites.push({
-        siteId: id,
-        nama: nama,
-        nop: nop,
-        lat: Number(rows[i][5]) || 0,
-        lng: Number(rows[i][6]) || 0
-      });
-    }
-  }
-  return out;
-}
-
-function writeMasterData(md) {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName(getMasterSheetName()) || ss.insertSheet(getMasterSheetName());
-  var rows = [['Kategori', 'ID', 'Nama', 'NOP', 'No. WA', 'Latitude', 'Longitude']];
-
-  (md.personil || []).forEach(function(p) {
-    if (!p || !p.id) return;
-    rows.push(['personil', str(p.id), str(p.nama), str(p.nop), '', '', '']);
-  });
-
-  (md.units || []).forEach(function(u) {
-    if (!u || !u.id) return;
-    rows.push(['units', str(u.id), str(u.nama), str(u.nop), str(u.noWa), '', '']);
-  });
-
-  (md.sites || []).forEach(function(s) {
-    if (!s || !s.siteId) return;
-    rows.push(['sites', str(s.siteId), str(s.nama), str(s.nop), '', Number(s.lat) || 0, Number(s.lng) || 0]);
-  });
-
-  sheet.clearContents();
-  sheet.getRange(1, 1, rows.length, 7).setValues(rows);
-}
-
-// ---------------------------------------------------------------- helper & response
-
-function str(v) {
-  if (v === null || v === undefined) return '';
-  return String(v);
+function str(value) {
+  return value === null || value === undefined ? '' : String(value);
 }
 
 function jsonOut(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
-    ContentService.MimeType.JSON
-  );
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }

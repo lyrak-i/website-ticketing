@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-"""Buat hash kata sandi untuk users di apps-script/Code.gs dan js/demo-users.js.
+"""Buat hash kata sandi untuk kolom `passwordHash` di tab `Auth_Users`.
 
 Format: pbkdf2$<ITER>$<SALT_HEX>$<HASH_HEX>  (PBKDF2-HMAC-SHA256)
 
 Pakai:
-    py -3 tools/hash_password.py --all          # semua user default
-    py -3 tools/hash_password.py omc kata-sandi  # hash untuk 1 user
+    py -3 tools/hash_password.py "password-baru"   # hash untuk 1 password
+
+Catatan: backend (apps-script/Auth.gs) sudah bisa membuat hash sendiri —
+password cukup diketik di dashboard Admin lalu disimpan lewat aksi `setPassword`.
+Alat ini cuma bantu kalau hash perlu dibuat di luar browser.
 """
 import hashlib
 import os
 import sys
 
 ITER = 10000
-USERS = [
-    ("omc", "omc2026", "Operator OMC (Dispatcher)", "omc", ""),
-    ("mbp01", "mbp2026", "MBP-01 (Tim Alpha)", "mbp", "MBP-01"),
-    ("mbp02", "mbp2026", "MBP-02 (Tim Bravo)", "mbp", "MBP-02"),
-    ("mbp03", "mbp2026", "MBP-03 (Tim Charlie)", "mbp", "MBP-03"),
-    ("mbp04", "mbp2026", "MBP-04 (Tim Delta)", "mbp", "MBP-04"),
-]
 
 
 def make_hash(password: str, salt: bytes = None) -> str:
@@ -28,13 +24,10 @@ def make_hash(password: str, salt: bytes = None) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) == 1 or sys.argv[1] == "--all":
-        for username, password, name, role, unit in USERS:
-            print("%-8s %-26s %s" % (username, name, make_hash(password)))
-        print("\nPassword default: OMC=omc2026, MBP=mbp2026 (ganti sebelum produksi)")
-        return 0
-
-    print(make_hash(sys.argv[2]))
+    if len(sys.argv) < 2:
+        print("Pakai: py -3 tools/hash_password.py \"password-baru\"")
+        return 1
+    print(make_hash(sys.argv[1]))
     return 0
 
 

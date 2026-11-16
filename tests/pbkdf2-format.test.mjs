@@ -13,11 +13,11 @@ function verifyPbkdf2(password, stored) {
   return actual.equals(expected);
 }
 
-const adminHash =
-  'pbkdf2$10000$c2ab6bd3d5ea28385e33a39e3cb8394b$509ad95ea212ef0d4a3e973865df363a605b1d52ad9e2f41afe78ee5aa481191';
+const knownAnswer =
+  'pbkdf2$10000$a1b2c3d4e5f60718293a4b5c6d7e8f90$36c9fd9116d7cf3493c10fc60076156a07b8a9f93a265c9db4e58e2104d42133';
 
-test('demo admin hash matches admin2026', () => {
-  assert.ok(verifyPbkdf2('admin2026', adminHash));
+test('vektor known-answer pbkdf2 terverifikasi', () => {
+  assert.ok(verifyPbkdf2('vektor-pbkdf2-uji', knownAnswer));
 });
 
 test('hash format length', () => {

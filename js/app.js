@@ -9,7 +9,7 @@ let adminNopFilter = localStorage.getItem(STORAGE_KEY_ADMIN_NOP) || '';
 function getEffectiveNopFilter() {
   const urlNop = new URLSearchParams(location.search).get('nop') || '';
   if (typeof currentUser !== 'undefined' && currentUser) {
-    if (currentUser.role === 'omc' && currentUser.nop) return currentUser.nop;
+    if (currentUser.role === 'omc') return currentUser.nop || '';
     if (currentUser.role === 'admin') {
       const live = document.getElementById('adminNopFilter')?.value;
       if (live !== undefined && live !== null && live !== '') return live;
@@ -46,11 +46,11 @@ function refreshNopFilterUi() {
   const clearBtn = document.getElementById('nopFilterClearBtn');
   if (banner) banner.classList.toggle('hidden', !nf);
   if (val) val.textContent = nf || '-';
-  const sessionBound = typeof currentUser !== 'undefined' && currentUser?.role === 'omc' && currentUser.nop;
+  const sessionBound = currentUser?.role === 'omc';
   if (clearBtn) clearBtn.classList.toggle('hidden', !!sessionBound);
 
   const adminSel = document.getElementById('adminNopFilter');
-  if (adminSel && typeof currentUser !== 'undefined' && currentUser?.role === 'admin') {
+  if (adminSel && currentUser?.role === 'admin') {
     const nops = listKnownNops();
     const cur = adminNopFilter;
     adminSel.innerHTML = '<option value="">Semua NOP</option>' + nops.map(n =>
@@ -116,17 +116,17 @@ function saveMasterData() {
   }
 }
 
-function siteNopOf(siteName) {
-  const key = (siteName || '').split(' ')[0];
-  const site = masterData.sites.find(s => s.siteId === key || s.nama === siteName);
+// Nop aktif sebuah order: dari Site List dulu, fallback ke nop di record order
+function getOrderNop(order) {
+  if (!order) return '';
+  if (order.nop) return order.nop; // Utamakan NOP historis yang sudah terkunci
+  const site = masterData.sites.find(s => s.siteId === (order.siteDestinasi || '').split(' ')[0] || s.nama === order.siteDestinasi);
   return site ? site.nop : '';
 }
 
-// Nop aktif sebuah order: historis di record, lalu lookup site.
-function getOrderNop(order) {
-  if (!order) return '';
-  if (order.nop) return order.nop;
-  return siteNopOf(order.siteDestinasi);
+function siteNopOf(siteName) {
+  const site = masterData.sites.find(s => s.siteId === (siteName || '').split(' ')[0] || s.nama === siteName);
+  return site ? site.nop : '';
 }
 
 // NOP unit: master data dulu, lalu site aktif / order terakhir
@@ -216,21 +216,18 @@ function generateNewOrderId() {
 
 function getSeedFleet() {
   const now = Date.now();
-  const minAgo = m => new Date(now - (m * 60000)).toISOString();
-  const fromMaster = (typeof masterData !== 'undefined' && masterData.units?.length)
-    ? masterData.units
-    : MASTER_SEED.units;
-  return fromMaster.map(u => ({
-    id: u.id,
-    namaMbp: u.nama,
-    noWa: u.noWa || '',
-    nop: u.nop || '',
+  const start = new Date(now - 30 * 60000).toISOString();
+  return (masterData.units?.length ? masterData.units : MASTER_SEED.units).map(unit => ({
+    id: unit.id,
+    namaMbp: unit.nama,
+    noWa: unit.noWa || '',
+    nop: unit.nop || '',
     status: 'idle',
     activeOrderId: '-',
     activeSite: '-',
     activePriority: 'Low',
-    tsIdleStart: minAgo(30),
-    tsCurrentStatusStart: minAgo(30),
+    tsIdleStart: start,
+    tsCurrentStatusStart: start,
     pendingOrder: null,
     estimasiEta: '-',
     selisihOtwEta: '-'
@@ -379,29 +376,11 @@ function initApp() {
 
   refreshNopFilterUi();
 
-  (async () => {
-    if (typeof HAS_MAGIC_LINK !== 'undefined' && HAS_MAGIC_LINK && typeof tryMagicLinkAuth === 'function') {
-      await tryMagicLinkAuth();
-    } else {
-      let session = typeof readSession === 'function' ? readSession() : null;
-      if (session && gasWebAppUrl && !session.sessionToken) session = null;
-      // Sesi teknisi MBP milik halaman mbp.html; di sini langsung arahkan.
-      if (session && session.role === 'mbp') {
-        if (!/mbp\.html$/.test(location.pathname)) {
-          goToMbpPage();
-          return;
-        }
-      } else if (session && typeof applyUser === 'function') {
-        applyUser(session, typeof isDemoMode === 'function' ? isDemoMode() : false);
-      }
-      if (!session || session.role !== 'mbp') renderAll();
-    }
-    if (gasWebAppUrl) await syncFromServer(false);
-  })();
-
-  setInterval(() => {
-    if (gasWebAppUrl) syncFromServer(false);
-  }, 10000);
+  async function runSync() {
+    if (gasWebAppUrl && readSession()) await syncFromServer(false);
+  }
+  runSync();
+  setInterval(runSync, 10000);
 }
 
 window.addEventListener('storage', (e) => {
@@ -417,14 +396,20 @@ window.addEventListener('storage', (e) => {
 
 );
 
-function updateConnectionBadge() {
+function updateConnectionBadge(connected = false, label = '') {
   const badge = document.getElementById('connectionBadge');
   if (!badge) return;
-  if (gasWebAppUrl) {
+  if (label) {
+    badge.textContent = label;
+    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 border border-rose-500/30 whitespace-nowrap';
+  } else if (connected) {
     badge.textContent = 'Sheets Terhubung';
     badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 whitespace-nowrap';
+  } else if (!gasWebAppUrl) {
+    badge.textContent = 'URL backend belum diatur';
+    badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 border border-rose-500/30 whitespace-nowrap';
   } else {
-    badge.textContent = 'Demo Lokal';
+    badge.textContent = 'Belum tersambung';
     badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30 whitespace-nowrap';
   }
 }
@@ -441,11 +426,7 @@ window.handleMbpDispatchChange = handleMbpDispatchChange;
 
 function populateSelectDropdowns() {
   const omcSelect = document.getElementById('dispatchMbpSelect');
-  const mobSelect = document.getElementById('mobileMbpSelect');
-
-  const currentOmc = omcSelect?.value || fleetList[0]?.namaMbp;
-  const currentMob = selectedMobileMbp || fleetList[0]?.namaMbp;
-
+  const currentOmc = omcSelect?.value || fleetInScope()[0]?.namaMbp;
   const scopedFleet = fleetInScope();
   if (omcSelect) {
     omcSelect.innerHTML = scopedFleet.map(m =>
@@ -453,24 +434,6 @@ function populateSelectDropdowns() {
     ).join('');
     omcSelect.value = scopedFleet.some(m => m.namaMbp === currentOmc) ? currentOmc : (scopedFleet[0]?.namaMbp || '');
   }
-
-  if (mobSelect) {
-    mobSelect.innerHTML = fleetList.map(m =>
-      `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)}</option>`
-    ).join('');
-    mobSelect.value = currentMob;
-    // Tampilkan pemilih unit hanya bila memang berguna: >1 unit tersedia,
-    // atau unit yang aktif tidak ditemukan di daftar (mis. magic link unit typo).
-    const picker = document.getElementById('mobileMbpPicker');
-    if (picker) {
-      const needsPicker = fleetList.length > 1 || !fleetList.some(m => m.namaMbp === currentMob);
-      picker.classList.toggle('hidden', !needsPicker);
-    }
-  }
-
-  if (!omcSelect && !mobSelect) return;
-
-  // Site List dari master data
   const siteSelect = document.getElementById('dispatchSiteSelect');
   if (siteSelect) {
     const currentSite = siteSelect.value;
@@ -569,34 +532,48 @@ async function handleDispatchClick(event) {
   updateWaLink();
 
   const unit = fleetList.find(m => m.namaMbp === namaMbp);
-  if (unit) {
-    const nowIso = new Date().toISOString();
-    unit.pendingOrder = {
-      orderId,
-      token: currentDispatchToken,
-      siteDestinasi: siteDest,
-      linkMapsSite,
-      prioritas,
-      nop: siteNopOf(siteDest),
-      dispatchedAt: nowIso
-    };
-    unit.status = 'belum_otw';
-    unit.activeOrderId = orderId;
-    unit.activeSite = siteDest;
-    unit.activePriority = prioritas;
-    unit.estimasiEta = '-';
-    unit.selisihOtwEta = '-';
-    unit.tsCurrentStatusStart = nowIso;
-    unit.noWa = rawWa;
-    saveAndBroadcast();
+  if (!unit) {
+    event.preventDefault();
+    alert('Unit MBP tidak ditemukan.');
+    return;
+  }
+  if (!currentUser || !['omc', 'admin'].includes(currentUser.role)) {
+    event.preventDefault();
+    alert('Login OMC/Admin diperlukan untuk mengirim tiket.');
+    return;
+  }
+  if (currentUser.role === 'omc' && siteNopOf(siteDest) !== currentUser.nop) {
+    event.preventDefault();
+    alert('Site tujuan harus berada di NOP akun OMC.');
+    return;
+  }
 
-    // Kirim order ke Sheets saat dispatch, supaya device lain langsung tahu
-    if (gasWebAppUrl) {
-      const idleMs = unit.tsIdleStart ? Date.now() - new Date(unit.tsIdleStart).getTime() : 0;
-      await postToGas({
-        action: 'updateStatus',
-        orderId,
-        dispatchToken: currentDispatchToken,
+  const nowIso = new Date().toISOString();
+  unit.pendingOrder = {
+    orderId,
+    token: currentDispatchToken,
+    siteDestinasi: siteDest,
+    linkMapsSite,
+    prioritas,
+    nop: siteNopOf(siteDest),
+    dispatchedAt: nowIso
+  };
+  unit.status = 'belum_otw';
+  unit.activeOrderId = orderId;
+  unit.activeSite = siteDest;
+  unit.activePriority = prioritas;
+  unit.estimasiEta = '-';
+  unit.selisihOtwEta = '-';
+  unit.tsCurrentStatusStart = nowIso;
+  unit.noWa = rawWa;
+  saveAndBroadcast();
+
+  if (gasWebAppUrl) {
+    const idleMs = unit.tsIdleStart ? Date.now() - new Date(unit.tsIdleStart).getTime() : 0;
+    const response = await postToGas({
+      action: 'updateStatus',
+      orderId,
+      dispatchToken: currentDispatchToken,
         namaMbp: unit.namaMbp,
         noWa: rawWa,
         siteDestinasi: siteDest,
@@ -609,10 +586,17 @@ async function handleDispatchClick(event) {
         selisihOtwEta: '-',
         tsIdle: unit.tsIdleStart || '',
         tsAccept: nowIso,
-        totalDurasi: 'Idle Sebelum Order: ' + formatDurationMs(Math.max(0, idleMs)),
-        lastIdleTimestamp: unit.tsIdleStart,
-        timestamp: nowIso
-      });
+      totalDurasi: 'Idle Sebelum Order: ' + formatDurationMs(Math.max(0, idleMs)),
+      timestamp: nowIso
+    });
+    if (response.status !== 'success') {
+      unit.status = 'idle';
+      unit.activeOrderId = '-';
+      unit.activeSite = '-';
+      unit.pendingOrder = null;
+      saveAndBroadcast();
+      event.preventDefault();
+      return;
     }
   }
 
@@ -681,7 +665,10 @@ function buildOrderPayload(unit, order, newStatus, timestamp) {
 
 // Ambil tiket & langsung OTW (dari state idle)
 async function beginJob(unit) {
-  // 1. Validasi ke Google Sheets terlebih dahulu agar tidak terjadi duplikasi Order ID
+  if (!currentUser?.sessionToken) {
+    alert('Sesi tidak valid. Login ulang.');
+    return;
+  }
   if (gasWebAppUrl) {
     await syncFromServer(false);
   }
@@ -958,6 +945,9 @@ function renderOmcView() {
   if (!document.getElementById('viewOmc')) return;
   refreshNopFilterUi();
   const scoped = fleetInScope();
+  const dispatchForm = document.getElementById('dispatchForm');
+  const allowed = currentUser?.role === 'admin' || currentUser?.role === 'omc';
+  if (dispatchForm) dispatchForm.classList.toggle('hidden', !allowed);
   const total = scoped.length;
   const idleCount = scoped.filter(m => statusKey(m.status) === 'idle').length;
   const movingCount = scoped.filter(m => {
@@ -1144,75 +1134,53 @@ function tickTimers() {
   }
 }
 
-function handleMobileMbpSelectChange() {
-  selectedMobileMbp = document.getElementById('mobileMbpSelect').value;
-  renderMobileView();
-}
-
 function applySheetRecords(sheetRecords) {
   const serverIds = new Set(sheetRecords.map(r => r.orderId));
   const localOnly = orderList.filter(o => !serverIds.has(o.orderId));
-  // normalisasi status server (label Sheets) -> kunci kanonik, agar approval & filter NOP tetap jalan
   sheetRecords.forEach(r => { r.status = statusKey(r.status); });
   orderList = sheetRecords.slice().reverse().concat(localOnly);
   localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
 
   const byMbp = new Map();
-  for (const r of sheetRecords) {
-    const key = (r.namaMbp || '').trim();
-    if (!key) continue;
-    // Baris placeholder (orderId "-") bukan tiket aktif: jangan dianggap order unit.
-    if (r.orderId === '-') continue;
+  for (const row of sheetRecords) {
+    const key = (row.namaMbp || '').trim();
+    if (!key || row.orderId === '-') continue;
     if (!byMbp.has(key)) byMbp.set(key, []);
-    byMbp.get(key).push(r);
+    byMbp.get(key).push(row);
   }
-  const tsOf = o => new Date(o.tsAccept || o.tsOtw || o.tsOnsite || o.tsSelesai || 0).getTime() || 0;
+  const timestampOf = row => new Date(row.tsSelesai || row.tsOnsite || row.tsOtw || row.tsAccept || 0).getTime() || 0;
 
   fleetList.forEach(unit => {
-    const rows = (byMbp.get((unit.namaMbp || '').trim()) || []).sort((a, b) => tsOf(b) - tsOf(a));
-    const open = rows.find(o => statusKey(o.status) !== 'selesai' && statusKey(o.status) !== 'idle');
-    // Order hasil dispatch OMC yang belum tercatat di Sheets: jangan ditimpa jadi idle.
-    const localDispatch =
-      statusKey(unit.status) === 'belum_otw' && unit.pendingOrder &&
-      !sheetRecords.some(o => o.orderId === unit.pendingOrder.orderId);
-    const serverOpen = open ? rows.find(o => o.orderId === open.orderId) : null;
-    const localTs = unit.pendingOrder?.dispatchedAt ? new Date(unit.pendingOrder.dispatchedAt).getTime() : 0;
-    const serverTs = serverOpen?.tsAccept ? new Date(serverOpen.tsAccept).getTime() : 0;
-    const keepLocalDispatch = localDispatch && (!serverOpen || localTs >= serverTs);
-    if (keepLocalDispatch && open && open.orderId !== unit.pendingOrder.orderId && localTs > serverTs) {
+    const rows = (byMbp.get((unit.namaMbp || '').trim()) || []).sort((a, b) => timestampOf(b) - timestampOf(a));
+    const open = rows.find(row => !['selesai', 'idle'].includes(statusKey(row.status)));
+    const localOrderId = unit.pendingOrder?.orderId || (unit.activeOrderId && unit.activeOrderId !== '-' ? unit.activeOrderId : '');
+    const localOrder = localOrderId ? orderList.find(row => row.orderId === localOrderId) : null;
+    const localTime = new Date(unit.pendingOrder?.dispatchedAt || localOrder?.timestamp || localOrder?.tsAccept || 0).getTime() || 0;
+    const serverOrder = localOrderId ? rows.find(row => row.orderId === localOrderId) : null;
+    const latestServer = rows[0];
+    if (localOrderId && !serverOrder && localTime >= timestampOf(latestServer || {})) {
       if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
       return;
     }
-    if (!open && keepLocalDispatch) {
-      if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
-      return;
-    }
+
     if (open) {
-      const openKey = statusKey(open.status);
-      unit.status = openKey;
+      const key = statusKey(open.status);
+      unit.status = key;
       unit.activeOrderId = open.orderId;
       unit.activeSite = open.siteDestinasi;
       unit.activePriority = open.prioritas;
       unit.estimasiEta = open.estimasiEta || '-';
       unit.selisihOtwEta = open.selisihOtwEta || '-';
-      // Status Belum OTW: timer mulai saat OMC dispatch, bukan saat accept
-      const stamp = openKey === 'otw' ? (open.tsOtw || open.tsAccept)
-        : openKey === 'belum_otw' ? (open.tsAccept || open.tsOtw)
-        : open.tsOnsite;
+      const stamp = open.tsSelesai || open.tsOnsite || open.tsOtw || open.tsAccept;
       if (stamp) unit.tsCurrentStatusStart = stamp;
-      // Order yang dibuat saat dispatch harus tetap punya pendingOrder di sisi MBP
-      if (openKey === 'belum_otw') {
-        unit.pendingOrder = unit.pendingOrder && unit.pendingOrder.orderId === open.orderId
-          ? unit.pendingOrder
-          : {
-              orderId: open.orderId,
-              token: open.token || '',
-              siteDestinasi: open.siteDestinasi,
-              linkMapsSite: open.linkMapsSite || '#',
-              prioritas: open.prioritas,
-              nop: open.nop || '',
-              dispatchedAt: open.tsAccept || new Date().toISOString()
-            };
+      if (key === 'belum_otw') {
+        unit.pendingOrder = unit.pendingOrder?.orderId === open.orderId ? unit.pendingOrder : {
+          orderId: open.orderId, token: open.dispatchToken || '', siteDestinasi: open.siteDestinasi,
+          linkMapsSite: open.linkMapsSite || '#', prioritas: open.prioritas, nop: open.nop || '',
+          dispatchedAt: open.tsAccept || new Date().toISOString()
+        };
+      } else {
+        unit.pendingOrder = null;
       }
     } else {
       unit.status = 'idle';
@@ -1221,10 +1189,8 @@ function applySheetRecords(sheetRecords) {
       unit.activePriority = 'Low';
       unit.estimasiEta = '-';
       unit.selisihOtwEta = '-';
-      if (rows[0] && rows[0].tsSelesai) {
-        unit.tsCurrentStatusStart = rows[0].tsSelesai;
-        unit.tsIdleStart = rows[0].tsSelesai;
-      }
+      if (latestServer?.tsSelesai) unit.tsIdleStart = unit.tsCurrentStatusStart = latestServer.tsSelesai;
+      unit.pendingOrder = null;
     }
     if (typeof checkMbpSessionExpiry === 'function') checkMbpSessionExpiry();
   });
@@ -1233,69 +1199,71 @@ function applySheetRecords(sheetRecords) {
   populateSelectDropdowns();
 }
 
-function notifySyncError(message) {
-  const syncText = document.getElementById('lastSyncText');
-  if (syncText) syncText.textContent = 'Sync gagal: ' + message;
-  const mob = document.getElementById('mobileSyncFeedback');
-  if (mob) {
-    mob.textContent = 'Gagal simpan: ' + message;
-    mob.classList.remove('hidden', 'text-emerald-700');
-    mob.classList.add('text-rose-700');
-    setTimeout(() => mob.classList.add('hidden'), 4000);
-  }
-}
+let isSyncing = false;
 
-function noteBackendVersion(json) {
-  if (!json || typeof json.backendVersion !== 'number') return;
-  if (typeof EXPECTED_BACKEND_VERSION === 'number' && json.backendVersion < EXPECTED_BACKEND_VERSION) {
-    const badge = document.getElementById('connectionBadge');
-    if (badge) {
-      badge.textContent = 'Backend perlu deploy ulang';
-      badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 border border-rose-500/30 whitespace-nowrap';
-    }
-  }
+function applyMasterResponse(json) {
+  if (!json?.masterData || !Array.isArray(json.masterData.personil) || !Array.isArray(json.masterData.sites) || !Array.isArray(json.masterData.units)) return;
+  masterData = json.masterData;
+  localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
+  syncFleetFromMaster();
+  renderAdminTables();
 }
 
 function applyServerPayload(json) {
   if (!json || json.status !== 'success' || !Array.isArray(json.data)) return false;
-  noteBackendVersion(json);
-  const sheetRecords = json.data.filter(r => r.orderId && r.orderId !== '-');
-  if (sheetRecords.length > 0) applySheetRecords(sheetRecords);
-  if (json.masterData && json.masterData.personil && json.masterData.sites && json.masterData.units) {
-    masterData = json.masterData;
-    localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-    syncFleetFromMaster();
-    renderAdminTables();
+  if (typeof EXPECTED_BACKEND_VERSION === 'number' && json.backendVersion !== EXPECTED_BACKEND_VERSION) {
+    updateConnectionBadge(false, 'Backend perlu deploy ulang');
+    notifySyncError('Versi backend di server tidak sama dengan frontend. Deploy ulang Apps Script.');
+    return false;
   }
+  const rows = json.data.filter(r => r.orderId && r.orderId !== '-');
+  applySheetRecords(rows);
+  applyMasterResponse(json);
   renderAll();
   const syncText = document.getElementById('lastSyncText');
   if (syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
+  updateConnectionBadge(true);
   return true;
 }
 
-function getGasSessionToken() {
-  const s = typeof readSession === 'function' ? readSession() : null;
-  return s?.sessionToken || '';
+function notifySyncError(message) {
+  const syncText = document.getElementById('lastSyncText');
+  if (syncText) syncText.textContent = 'Sync gagal: ' + message;
+  const feedback = document.getElementById('mobileSyncFeedback');
+  if (feedback) {
+    feedback.textContent = 'Gagal simpan: ' + message;
+    feedback.classList.remove('hidden', 'text-emerald-700');
+    feedback.classList.add('text-rose-700');
+    setTimeout(() => feedback.classList.add('hidden'), 5000);
+  }
+  updateConnectionBadge(false, 'Sync gagal');
 }
 
-async function gasPost(payload, options = {}) {
+function getGasSessionToken() {
+  return typeof readSession === 'function' ? readSession()?.sessionToken || '' : '';
+}
+
+async function gasPost(payload, { auth = true } = {}) {
   if (!gasWebAppUrl) return { status: 'error', message: 'URL Apps Script belum diatur.' };
   const body = { ...payload };
-  if (options.auth !== false) {
-    const token = getGasSessionToken();
-    if (!token) return { status: 'error', message: 'Sesi habis. Login ulang.' };
-    body.sessionToken = token;
+  if (body.action === 'updateStatus' && !body.nop) body.nop = siteNopOf(body.siteDestinasi);
+  if (auth) {
+    body.sessionToken = getGasSessionToken();
+    if (!body.sessionToken) return { status: 'error', message: 'Sesi habis. Login ulang.' };
   }
   try {
     const res = await fetch(gasWebAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body),
-      redirect: 'follow'
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body), redirect: 'follow'
     });
     const json = await res.json();
-    if (json.status === 'success' && Array.isArray(json.data)) applyServerPayload(json);
-    else if (json.status === 'error') notifySyncError(json.message || 'Server menolak permintaan');
+    if (json.status === 'success' && !Array.isArray(json.data)) applyMasterResponse({ masterData: json.masterData });
+    if (json.status === 'success') {
+      if (Array.isArray(json.data)) applyServerPayload(json);
+    } else {
+      if (/sesi tidak valid|kedaluwarsa/i.test(json.message || '')) logout();
+      notifySyncError(json.message || 'Server menolak permintaan');
+    }
     return json;
   } catch (err) {
     notifySyncError(err.message || String(err));
@@ -1304,19 +1272,17 @@ async function gasPost(payload, options = {}) {
 }
 window.gasPost = gasPost;
 
-let isSyncing = false;
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');
-  if (!gasWebAppUrl || isSyncing) {
-    if (syncText) syncText.textContent = 'Lokal: ' + new Date().toLocaleTimeString('id-ID');
-    return;
-  }
+  if (!gasWebAppUrl || isSyncing) return;
+  const sessionToken = getGasSessionToken();
+  if (!sessionToken) return;
   isSyncing = true;
-
   try {
-    const res = await fetch(gasWebAppUrl, { method: 'GET', redirect: 'follow' });
-    const json = await res.json();
-    if (!applyServerPayload(json) && json?.message) notifySyncError(json.message);
+    const json = await gasPost({ action: 'read' });
+    if (json.status !== 'success') return;
+    const ok = applyServerPayload(json);
+    if (showSpinner && ok && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
   } catch (err) {
     notifySyncError(err.message || String(err));
   } finally {
@@ -1325,11 +1291,17 @@ async function syncFromServer(showSpinner = false) {
 }
 
 async function postToGas(payload) {
-  return gasPost(payload);
+  if (!gasWebAppUrl) return { status: 'error', message: 'URL Apps Script belum diatur.' };
+  if (payload.action === 'saveMaster') {
+    const result = await gasPost(payload);
+    if (result.status === 'success') applyMasterResponse({ masterData: payload.masterData });
+    return result;
+  }
+  const result = await gasPost(payload);
+  if (result.status === 'success' && payload.action === 'setPassword') result.newPassword = payload.newPassword;
+  if (result.status !== 'success') notifySyncError(result.message || 'Gagal menyimpan ke server.');
+  return result;
 }
-
-
-// ============================================================================
 // Halaman Admin: CRUD master data (Personil OMC / Site List / Unit MBP)
 // ============================================================================
 const ADMIN_TABLES = {
@@ -1427,16 +1399,21 @@ async function applyAdminStatusOverride(unit, to) {
   }
 
   if (to === 'idle' || to === 'selesai') {
+    if (!order && unit.activeOrderId !== '-') throw new Error('Order aktif tidak ditemukan; status tidak diubah.');
+    if (!order && unit.pendingOrder) order = { ...unit.pendingOrder, namaMbp: unit.namaMbp, noWa: unit.noWa, status: 'belum_otw' };
+    if (order && to === 'idle') order.status = 'selesai';
     if (order && to === 'selesai') order.tsSelesai = nowIso;
     const orderSnap = order;
     closeOrder(unit, nowIso, nowMs);
     saveAndBroadcast();
-    if (gasWebAppUrl && orderSnap) {
-      await postToGas(buildOrderPayload(unit, orderSnap, STATUS_LABEL.selesai, nowIso));
-    }
+    if (gasWebAppUrl && orderSnap) await postToGas(buildOrderPayload(unit, orderSnap, STATUS_LABEL.selesai, nowIso));
     return;
   }
 
+  if (!order) throw new Error('Status selain Idle memerlukan order aktif.');
+  if (to === 'otw') { order.tsOtw = order.tsOtw || nowIso; unit.estimasiEta = order.estimasiEta || '-'; }
+  if (to === 'onsite') order.tsOnsite = order.tsOnsite || nowIso;
+  if (to === 'waiting_selesai') order.tsSelesai = order.tsSelesai || '';
   if (order) {
     order.status = to;
     if (to === 'otw' && !order.tsOtw) order.tsOtw = nowIso;
@@ -1454,6 +1431,7 @@ async function applyAdminStatusOverride(unit, to) {
 }
 
 async function adminApplyFleetStatus(fleetIndex) {
+  if (currentUser?.role !== 'admin') return;
   const unit = fleetList[fleetIndex];
   if (!unit) return;
 
@@ -1471,79 +1449,69 @@ async function adminApplyFleetStatus(fleetIndex) {
   const toLabel = STATUS_LABEL[to] || to;
   if (!confirm(`Ubah status ${unit.namaMbp}\n${fromLabel} → ${toLabel}?`)) return;
 
-  await applyAdminStatusOverride(unit, to);
-  renderAdminFleetStatus();
-}
-
-let adminAuthUsers = [];
-
-async function loadAdminAuthUsers(force) {
-  const tbody = document.getElementById('adminAuthUsersBody');
-  if (!tbody) return;
-  if (typeof currentUser !== 'undefined' && currentUser?.role !== 'admin') {
-    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-muted">Hanya Admin.</td></tr>';
-    return;
-  }
-  if (!gasWebAppUrl) {
-    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-amber-700">Hubungkan Apps Script untuk kelola akun server.</td></tr>';
-    return;
-  }
-  if (!force && adminAuthUsers.length) {
-    renderAdminAuthUsers();
-    return;
-  }
-  const json = await gasPost({ action: 'listUsers' });
-  if (json?.status === 'success' && Array.isArray(json.users)) {
-    adminAuthUsers = json.users;
-    renderAdminAuthUsers();
-  } else if (json?.message) {
-    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-xs text-rose-700">${escapeHtml(json.message)}</td></tr>`;
+  try {
+    await applyAdminStatusOverride(unit, to);
+    renderAdminFleetStatus();
+  } catch (err) {
+    alert(err.message);
   }
 }
-window.loadAdminAuthUsers = loadAdminAuthUsers;
 
-function renderAdminAuthUsers() {
+async function loadAdminAuthUsers() {
+  if (currentUser?.role !== 'admin') return;
+  const response = await gasPost({ action: 'listUsers' });
+  if (response.status !== 'success') return;
+  const notice = document.getElementById('adminAuthNotice');
+  if (notice) { notice.textContent = ''; notice.classList.add('hidden'); }
   const tbody = document.getElementById('adminAuthUsersBody');
   if (!tbody) return;
-  if (!adminAuthUsers.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-muted">Belum ada akun. Simpan Master Data untuk membuat akun personil OMC.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = adminAuthUsers.map(u => `
-    <tr class="hover:bg-surface-3 transition">
-      <td class="py-2 px-3 text-xs font-mono text-body">${escapeHtml(u.username)}</td>
-      <td class="py-2 px-3 text-xs text-body">${escapeHtml(u.name || '-')}</td>
-      <td class="py-2 px-3 text-xs text-muted">${escapeHtml(u.role || '-')}</td>
-      <td class="py-2 px-3 text-xs font-mono text-muted">${escapeHtml(u.nop || '-')}</td>
-      <td class="py-2 px-3 whitespace-nowrap">
-        <button type="button" onclick='adminResetPassword(${JSON.stringify(u.username)})' class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[11px] font-semibold text-amber-800">Reset password</button>
-      </td>
-    </tr>
+  const users = response.users || [];
+  tbody.innerHTML = users.map(user => `
+    <tr><td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td><td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td><td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td><td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td><td class="py-2 px-3"><button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs">Atur password</button></td></tr>
   `).join('');
-}
-
-async function adminResetPassword(username) {
-  if (!confirm('Reset password untuk ' + username + '? Password baru akan ditampilkan sekali.')) return;
-  const json = await gasPost({ action: 'setPassword', targetUsername: username });
-  const hint = document.getElementById('adminAuthHint');
-  if (json?.status === 'success' && json.newPassword) {
-    if (hint) {
-      hint.textContent = `Password baru untuk ${username}: ${json.newPassword} — salin sekarang, tidak ditampilkan lagi.`;
-      hint.classList.remove('hidden');
-    }
-    if (Array.isArray(json.users)) {
-      adminAuthUsers = json.users;
-      renderAdminAuthUsers();
-    }
-  } else {
-    alert(json?.message || 'Gagal reset password.');
+  const known = new Set(users.map(user => user.username));
+  const select = document.getElementById('adminAuthPersonSelect');
+  if (select) {
+    const people = (masterData.personil || []).filter(person => !known.has(String(person.id).toLowerCase()));
+    select.innerHTML = people.map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.id)} — ${escapeHtml(person.nama)} (${escapeHtml(person.nop)})</option>`).join('');
+    select.disabled = !people.length;
   }
 }
-window.adminResetPassword = adminResetPassword;
+
+async function adminSetAuthPassword(username, createIfMissing = false) {
+  const password = document.getElementById('adminAuthNewPassword')?.value || '';
+  if (password.length < 8) {
+    alert('Password minimal 8 karakter.');
+    return;
+  }
+  const person = masterData.personil.find(item => String(item.id).toLowerCase() === username);
+  const response = await gasPost({
+    action: 'setPassword', targetUsername: username, newPassword: password, createIfMissing,
+    role: 'omc', name: person?.nama || username, nop: person?.nop || ''
+  });
+  if (response.status !== 'success') return;
+  const output = document.getElementById('adminAuthPasswordNotice');
+  output.textContent = `Password baru tersimpan untuk ${response.username}. Berikan password baru yang tadi kamu masukkan kepada pemilik akun.`;
+  output.classList.remove('hidden');
+  document.getElementById('adminAuthNewPassword').value = '';
+  await loadAdminAuthUsers();
+}
+
+function adminSetSelectedAuthPassword() {
+  const username = document.getElementById('adminAuthPersonSelect')?.value.toLowerCase();
+  if (username) return adminSetAuthPassword(username, true);
+  return Promise.resolve();
+}
+
+function adminResetAuthPassword(username) {
+  document.getElementById('adminAuthPersonSelect').value = username;
+  return adminSetAuthPassword(username, false);
+}
 
 function renderAdminTables() {
+  const accounts = document.getElementById('adminAccountsPanel');
+  if (accounts) accounts.classList.toggle('hidden', currentUser?.role !== 'admin');
   renderAdminFleetStatus();
-  loadAdminAuthUsers(false);
   Object.keys(ADMIN_TABLES).forEach(key => {
     const tbody = document.getElementById('adminTbody_' + key);
     if (!tbody) return;
@@ -1689,6 +1657,16 @@ function syncFleetFromMaster() {
   // 2. Hapus unit dari fleetList jika sudah dihapus oleh Admin (kecuali sedang memegang order aktif)
   const validNames = new Set(masterData.units.map(u => u.nama));
   fleetList = fleetList.filter(f => validNames.has(f.namaMbp) || statusKey(f.status) !== 'idle');
+  masterData.units.forEach(unit => {
+    if (!fleetList.some(fleet => fleet.id === unit.id || fleet.namaMbp === unit.nama)) {
+      fleetList.push({
+        id: unit.id, namaMbp: unit.nama, noWa: unit.noWa || '', nop: unit.nop || '',
+        status: 'idle', activeOrderId: '-', activeSite: '-', activePriority: 'Low',
+        tsIdleStart: new Date().toISOString(), tsCurrentStatusStart: new Date().toISOString(),
+        pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-'
+      });
+    }
+  });
 }
 
 function goToMbpPage() {
@@ -1697,22 +1675,16 @@ function goToMbpPage() {
 }
 
 function switchRole(role) {
-  // Tampilan MBP pindah ke halaman terpisah (mbp.html).
-  // Kalau sudah di mbp.html, cukup set role (tak ada viewMbp di halaman itu).
-  if (role === 'mbp') {
-    activeRole = role;
-    if (!/mbp\.html$/.test(location.pathname)) goToMbpPage();
-    return;
-  }
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'omc')) return;
+  if (currentUser.role === 'omc') role = 'omc';
+  if (role === 'mbp') return;
   activeRole = role;
   const views = {
     omc: document.getElementById('viewOmc'),
-    mbp: document.getElementById('viewMbp'),
     admin: document.getElementById('viewAdmin')
   };
   const tabs = {
     omc: document.getElementById('tabOmc'),
-    mbp: document.getElementById('tabMbp'),
     admin: document.getElementById('tabAdmin')
   };
   const onCls = 'flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow';
@@ -1724,24 +1696,30 @@ function switchRole(role) {
     views[k].classList.toggle('hidden', hide);
     tabs[k].className = hide ? offCls : onCls;
   });
+  tabs.admin?.classList.toggle('hidden', currentUser?.role !== 'admin');
 
-  if (role === 'admin') renderAdminTables();
+  if (activeRole === 'admin') {
+    renderAdminTables();
+    loadAdminAuthUsers();
+  }
   renderAll();
 }
 
 function setAdminNopFilter(nop) {
+  if (currentUser?.role !== 'admin') return;
   adminNopFilter = nop || '';
   if (adminNopFilter) localStorage.setItem(STORAGE_KEY_ADMIN_NOP, adminNopFilter);
   else localStorage.removeItem(STORAGE_KEY_ADMIN_NOP);
   refreshNopFilterUi();
   populateSelectDropdowns();
-  renderAll();
   if (activeRole === 'admin') renderAdminTables();
+  renderAll();
 }
 window.setAdminNopFilter = setAdminNopFilter;
 
 function clearNopFilter() {
-  if (typeof currentUser !== 'undefined' && currentUser?.role === 'admin') {
+  if (currentUser?.role === 'omc') return;
+  if (currentUser?.role === 'admin') {
     setAdminNopFilter('');
     return;
   }
@@ -1751,6 +1729,7 @@ function clearNopFilter() {
 }
 
 function toggleConfigModal() {
+  if (currentUser?.role !== 'admin') return;
   const modal = document.getElementById('configModal');
   const input = document.getElementById('gasUrlInput');
   if (modal.classList.contains('hidden')) {
@@ -1764,20 +1743,30 @@ function toggleConfigModal() {
 }
 
 function saveGasUrl() {
-  gasWebAppUrl = document.getElementById('gasUrlInput').value.trim();
+  const url = document.getElementById('gasUrlInput').value.trim();
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin !== 'https://script.google.com' || !parsed.pathname.endsWith('/exec')) throw new Error();
+  } catch (err) {
+    alert('Masukkan URL Apps Script /exec yang valid.');
+    return;
+  }
+  gasWebAppUrl = url;
   localStorage.setItem(STORAGE_KEY_URL, gasWebAppUrl);
-  updateConnectionBadge();
+  updateConnectionBadge(false, 'Memeriksa backend…');
   toggleConfigModal();
-  if (gasWebAppUrl) syncFromServer(true);
+  const session = readSession();
+  if (session) syncFromServer(true);
 }
 
 function resetDemoData() {
+  if (!confirm('Reset data lokal armada dan riwayat? Data di server tidak dihapus.')) return;
   localStorage.removeItem(STORAGE_KEY_FLEET);
   localStorage.removeItem(STORAGE_KEY_ORDERS);
   fleetList = getSeedFleet();
   orderList = [];
   saveAndBroadcast();
-  toggleConfigModal();
+  renderAll();
 }
 
 if (document.readyState === 'loading') {

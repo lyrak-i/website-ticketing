@@ -3,30 +3,17 @@
  * Tab spreadsheet: Auth_Users (kolom A–G).
  */
 
-var AUTH_BACKEND_VERSION = 2;
+var AUTH_BACKEND_VERSION = 3;
 var AUTH_SESSION_TTL_SEC = 12 * 60 * 60;
 var AUTH_USERS_SHEET = 'Auth_Users';
 var AUTH_CACHE_PREFIX = 'sess:';
-
-// Hash awal (sama dengan js/demo-users.js) — hanya dipakai saat tab user masih kosong.
-var AUTH_BOOTSTRAP_USERS = [
-  {
-    username: 'admin',
-    role: 'admin',
-    name: 'Administrator Master Data',
-    nop: '',
-    unit: '',
-    passwordHash: 'pbkdf2$10000$c2ab6bd3d5ea28385e33a39e3cb8394b$509ad95ea212ef0d4a3e973865df363a605b1d52ad9e2f41afe78ee5aa481191'
-  },
-  {
-    username: 'omc',
-    role: 'omc',
-    name: 'Operator OMC (semua NOP, demo)',
-    nop: '',
-    unit: '',
-    passwordHash: 'pbkdf2$10000$7655671bf2e3a9dde0d81431de7ea036$dcafaa0490bb438fa347fd24ec83e1f4937e3e33750e2b7291303cacd45377ce'
-  }
-];
+var AUTH_HASH_ITERATIONS = 10000;
+var AUTH_BOOTSTRAP_USERS = [{
+  username: 'admin', role: 'admin', name: 'Administrator Master Data', nop: '', unit: '',
+  passwordHash: ''
+}];
+// Password awal admin TIDAK disimpan di source. Operator wajib membuat
+// Script Property `INITIAL_ADMIN_PASSWORD` sendiri sebelum bootstrap pertama.
 
 function authBackendVersion() {
   return AUTH_BACKEND_VERSION;
@@ -40,21 +27,21 @@ function getAuthUsersSheet() {
     sheet.getRange(1, 1, 1, 7).setValues([[
       'username', 'role', 'name', 'nop', 'unit', 'passwordHash', 'updatedAt'
     ]]);
-    authBootstrapIfEmpty(sheet);
-  } else if (sheet.getLastRow() < 2) {
-    authBootstrapIfEmpty(sheet);
   }
+  if (sheet.getLastRow() < 2) authBootstrapIfEmpty_(sheet);
   return sheet;
 }
 
-function authBootstrapIfEmpty(sheet) {
-  var now = new Date().toISOString();
-  var rows = [];
-  for (var i = 0; i < AUTH_BOOTSTRAP_USERS.length; i++) {
-    var u = AUTH_BOOTSTRAP_USERS[i];
-    rows.push([u.username, u.role, u.name, u.nop, u.unit, u.passwordHash, now]);
+function authBootstrapIfEmpty_(sheet) {
+  var initialPassword = PropertiesService.getScriptProperties().getProperty('INITIAL_ADMIN_PASSWORD');
+  if (!initialPassword || initialPassword.length < 8) {
+    throw new Error('Set Script Property INITIAL_ADMIN_PASSWORD (minimal 8 karakter) sebelum login pertama.');
   }
-  if (rows.length) sheet.getRange(2, 1, rows.length, 7).setValues(rows);
+  var bootstrapHash = authMakePasswordHash(initialPassword);
+  AUTH_BOOTSTRAP_USERS[0].passwordHash = bootstrapHash;
+  sheet.getRange(2, 1, 1, 7).setValues([[
+    'admin', 'admin', 'Administrator Master Data', '', '', bootstrapHash, new Date().toISOString()
+  ]]);
 }
 
 function authReadUsers() {
@@ -103,41 +90,44 @@ function authVerifyPassword(password, storedHash) {
 }
 
 function authMakePasswordHash(password) {
-  var saltBytes = [];
-  for (var i = 0; i < 16; i++) saltBytes.push(Math.floor(Math.random() * 256));
-  var saltHex = bytesToHex(new Uint8Array(saltBytes));
-  var iterations = 10000;
-  var hashHex = pbkdf2Sha256(String(password), saltHex, iterations, 32);
-  return 'pbkdf2$' + iterations + '$' + saltHex + '$' + hashHex;
+  var saltHex = '';
+  while (saltHex.length < 32) {
+    var sample = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid());
+    for (var i = 0; i < sample.length && saltHex.length < 32; i++) {
+      var value = sample[i] & 255;
+      saltHex += (value < 16 ? '0' : '') + value.toString(16);
+    }
+  }
+  saltHex = saltHex.slice(0, 32);
+  var hashHex = pbkdf2Sha256(String(password), saltHex, AUTH_HASH_ITERATIONS, 32);
+  return 'pbkdf2$' + AUTH_HASH_ITERATIONS + '$' + saltHex + '$' + hashHex;
 }
 
 function authUpsertUser(record) {
-  var sheet = getAuthUsersSheet();
-  var username = String(record.username || '').trim().toLowerCase();
-  if (!username) throw new Error('username wajib');
-
-  var existing = authFindUser(username);
-  var now = new Date().toISOString();
-  var row = [
-    username,
-    str(record.role),
-    str(record.name),
-    str(record.nop),
-    str(record.unit),
-    str(record.passwordHash),
-    now
-  ];
-
-  if (existing && existing.rowIndex) {
-    sheet.getRange(existing.rowIndex, 1, 1, 7).setValues([row]);
-  } else {
-    sheet.appendRow(row);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = getAuthUsersSheet();
+    var username = String(record.username || '').trim().toLowerCase();
+    if (!username) throw new Error('username wajib');
+    var existing = authFindUser(username);
+    var row = [username, str(record.role), str(record.name), str(record.nop), str(record.unit), str(record.passwordHash), new Date().toISOString()];
+    if (existing && existing.rowIndex) sheet.getRange(existing.rowIndex, 1, 1, 7).setValues([row]);
+    else sheet.appendRow(row);
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function authCreateSession(user, extra) {
   extra = extra || {};
-  var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid());
+  var token = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var value = bytes[i] & 255;
+    token += (value < 16 ? '0' : '') + value.toString(16);
+  }
+  token += Utilities.getUuid().replace(/-/g, '');
   var payload = {
     username: user.username,
     role: user.role,
@@ -173,26 +163,52 @@ function authDestroySession(token) {
 function authRequire(payload) {
   var token = String((payload && payload.sessionToken) || '').trim();
   var session = authGetSession(token);
-  if (!session) {
-    return { ok: false, message: 'Sesi tidak valid atau kedaluwarsa. Login ulang.' };
+  if (!session) return { ok: false, message: 'Sesi tidak valid atau kedaluwarsa. Login ulang.' };
+  var account = authFindUser(session.username);
+  if (session.role !== 'mbp' && (!account || account.role !== session.role)) {
+    authDestroySession(token);
+    return { ok: false, message: 'Akun tidak aktif.' };
+  }
+  if (account) {
+    session.name = account.name;
+    session.nop = account.nop;
+    session.unit = account.unit;
+    if (account.role === 'omc') {
+      var master = readMasterJson() || { personil: [] };
+      var person = (master.personil || []).find(function (p) { return String(p.id || '').trim().toLowerCase() === account.username; });
+      if (!person || String(person.nop || '') !== account.nop) {
+        authDestroySession(token);
+        return { ok: false, message: 'Akun OMC tidak aktif di MasterData.' };
+      }
+    }
+    CacheService.getScriptCache().put(AUTH_CACHE_PREFIX + token, JSON.stringify(session), AUTH_SESSION_TTL_SEC);
   }
   return { ok: true, session: session };
+}
+
+function authHandleValidateSession(payload) {
+  var auth = authRequire(payload);
+  if (!auth.ok) return { status: 'error', message: auth.message };
+  return { status: 'success', user: auth.session, backendVersion: AUTH_BACKEND_VERSION };
 }
 
 function authHandleLogin(payload) {
   ensureCryptoReady_();
   var username = String(payload.username || '').trim().toLowerCase();
   var password = String(payload.password || '');
-  if (!username || !password) {
-    return { status: 'error', message: 'Username dan password wajib.' };
-  }
+  if (!username || !password) return { status: 'error', message: 'Username dan password wajib.' };
   var user = authFindUser(username);
-  if (!user || !authVerifyPassword(password, user.passwordHash)) {
-    return { status: 'error', message: 'Username atau password salah.' };
+  if (!user && username === 'admin') {
+    var bootstrapPassword = PropertiesService.getScriptProperties().getProperty('INITIAL_ADMIN_PASSWORD');
+    var bootstrapHash = AUTH_BOOTSTRAP_USERS[0].passwordHash;
+    if (bootstrapPassword && authVerifyPassword(password, bootstrapHash)) {
+      authUpsertUser({ username: 'admin', role: 'admin', name: 'Administrator Master Data', nop: '', unit: '', passwordHash: bootstrapHash });
+      PropertiesService.getScriptProperties().deleteProperty('INITIAL_ADMIN_PASSWORD');
+      user = authFindUser('admin');
+    }
   }
-  if (user.role === 'mbp') {
-    return { status: 'error', message: 'Login manual MBP dinonaktifkan. Gunakan link WhatsApp.' };
-  }
+  if (!user || !authVerifyPassword(password, user.passwordHash)) return { status: 'error', message: 'Username atau password salah.' };
+  if (user.role !== 'admin' && user.role !== 'omc') return { status: 'error', message: 'Role tidak diizinkan login di dashboard ini.' };
   var sess = authCreateSession(user, {});
   return { status: 'success', sessionToken: sess.sessionToken, user: sess.user, backendVersion: AUTH_BACKEND_VERSION };
 }
@@ -207,21 +223,12 @@ function authHandleValidateMagicLink(payload) {
   var orderId = String(payload.orderId || '').trim();
   var token = String(payload.token || '').trim().toLowerCase();
   var namaMbp = String(payload.namaMbp || '').trim();
-  if (!orderId || !token) {
-    return { status: 'error', message: 'Link tidak lengkap (order/token).' };
-  }
-
+  if (!orderId || !token || !namaMbp) return { status: 'error', message: 'Link tidak lengkap.' };
   var row = findOrderRowById(orderId);
-  if (!row) {
-    return { status: 'error', message: 'Tiket tidak ditemukan. Pastikan OMC sudah mengirim dispatch ke server.' };
-  }
+  if (!row) return { status: 'error', message: 'Tiket tidak ditemukan.' };
   var storedToken = String(row.dispatchToken || '').trim().toLowerCase();
-  if (!storedToken || storedToken !== token) {
-    return { status: 'error', message: 'Token link tidak valid atau sudah kedaluwarsa.' };
-  }
-  if (namaMbp && row.namaMbp && row.namaMbp !== namaMbp) {
-    return { status: 'error', message: 'Link ini untuk unit MBP lain.' };
-  }
+  if (!storedToken || !safeEquals(storedToken, token)) return { status: 'error', message: 'Token link tidak valid.' };
+  if (row.namaMbp !== namaMbp) return { status: 'error', message: 'Link ini untuk unit MBP lain.' };
   var st = String(row.status || '').toLowerCase();
   if (st.indexOf('selesai') !== -1) {
     return { status: 'error', message: 'Tiket sudah SELESAI. Link tidak berlaku.' };
@@ -251,6 +258,7 @@ function authHandleListUsers(payload) {
       name: u.name,
       nop: u.nop,
       unit: u.unit,
+      needsPasswordSetup: !u.passwordHash,
       updatedAt: u.updatedAt
     };
   });
@@ -260,77 +268,50 @@ function authHandleListUsers(payload) {
 function authHandleSetPassword(payload) {
   var auth = authRequire(payload);
   if (!auth.ok) return { status: 'error', message: auth.message };
-  if (auth.session.role !== 'admin') {
-    return { status: 'error', message: 'Hanya Admin yang boleh mengatur password.' };
-  }
+  if (auth.session.role !== 'admin') return { status: 'error', message: 'Hanya Admin yang boleh mengatur akun.' };
   var username = String(payload.targetUsername || '').trim().toLowerCase();
-  if (!username) return { status: 'error', message: 'targetUsername wajib' };
+  var role = String(payload.role || 'omc').trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,40}$/.test(username) || (role !== 'admin' && role !== 'omc')) return { status: 'error', message: 'Username atau role tidak valid.' };
+  if (username === 'admin' && auth.session.username !== 'admin') return { status: 'error', message: 'Hanya akun admin utama yang dapat mengatur admin.' };
 
-  var target = authFindUser(username);
-  if (!target && payload.createIfMissing) {
-    target = {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var target = authFindUser(username);
+    if (target && target.role !== role) return { status: 'error', message: 'Role akun yang sudah ada tidak dapat diubah di sini.' };
+    if (!target && !payload.createIfMissing) return { status: 'error', message: 'User tidak ditemukan.' };
+
+    var newPassword = String(payload.newPassword || '');
+    if (newPassword.length < 8 || newPassword.length > 128) return { status: 'error', message: 'Password harus 8–128 karakter.' };
+    var master = readMasterJson() || { personil: [], sites: [], units: [] };
+    var person = (master.personil || []).find(function (p) { return String(p.id || '').trim().toLowerCase() === username; });
+    if (role === 'omc' && !person) return { status: 'error', message: 'Akun OMC harus terdaftar sebagai personil dengan ID yang sama.' };
+    if (target && role === 'omc' && String(person.nop || '') !== target.nop) return { status: 'error', message: 'NOP pada akun berbeda dengan MasterData.' };
+    if (role === 'admin' && username !== 'admin') return { status: 'error', message: 'Hanya akun admin utama yang dapat disunting.' };
+
+    authUpsertUser({
       username: username,
-      role: String(payload.role || 'omc').toLowerCase(),
-      name: String(payload.name || username),
-      nop: String(payload.nop || ''),
-      unit: '',
-      passwordHash: ''
-    };
+      role: target ? target.role : role,
+      name: target ? target.name : String(payload.name || (person && person.nama) || username),
+      nop: target ? target.nop : String(payload.nop || (person && person.nop) || ''),
+      unit: target ? target.unit : '',
+      passwordHash: authMakePasswordHash(newPassword)
+    });
+    if (username === 'admin') PropertiesService.getScriptProperties().deleteProperty('INITIAL_ADMIN_PASSWORD');
+    return { status: 'success', username: username, users: authHandleListUsers(payload).users };
+  } finally {
+    lock.releaseLock();
   }
-  if (!target) return { status: 'error', message: 'User tidak ditemukan.' };
-
-  var newPassword = String(payload.newPassword || '').trim();
-  if (!newPassword) {
-    newPassword = authGenerateTempPassword();
-  }
-  if (newPassword.length < 6) {
-    return { status: 'error', message: 'Password minimal 6 karakter.' };
-  }
-
-  authUpsertUser({
-    username: target.username,
-    role: target.role || payload.role || 'omc',
-    name: target.name || payload.name || username,
-    nop: target.nop || payload.nop || '',
-    unit: target.unit || '',
-    passwordHash: authMakePasswordHash(newPassword)
-  });
-
-  return {
-    status: 'success',
-    username: username,
-    newPassword: newPassword,
-    users: authHandleListUsers(payload).users
-  };
 }
 
 function authSyncPersonilFromMaster(masterData) {
-  if (!masterData || !masterData.personil) return;
-  var defaultHash = authFindUser('omc');
-  var hash = defaultHash ? defaultHash.passwordHash : AUTH_BOOTSTRAP_USERS[1].passwordHash;
-
+  if (!masterData || !Array.isArray(masterData.personil)) return;
   masterData.personil.forEach(function (p) {
     if (!p || !p.id) return;
     var username = String(p.id).trim().toLowerCase();
     var existing = authFindUser(username);
-    if (existing) {
-      authUpsertUser({
-        username: username,
-        role: 'omc',
-        name: p.nama || existing.name,
-        nop: p.nop || existing.nop,
-        unit: '',
-        passwordHash: existing.passwordHash
-      });
-    } else {
-      authUpsertUser({
-        username: username,
-        role: 'omc',
-        name: p.nama || username,
-        nop: p.nop || '',
-        unit: '',
-        passwordHash: hash
-      });
+    if (existing && existing.role === 'omc') {
+      authUpsertUser({ username: username, role: 'omc', name: p.nama || existing.name, nop: p.nop || existing.nop, unit: '', passwordHash: existing.passwordHash });
     }
   });
 }
@@ -338,18 +319,41 @@ function authSyncPersonilFromMaster(masterData) {
 function authGenerateTempPassword() {
   var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
   var out = '';
-  for (var i = 0; i < 10; i++) {
-    out += chars.charAt(Math.floor(Math.random() * chars.length));
+  while (out.length < 12) {
+    var sample = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid());
+    for (var i = 0; i < sample.length && out.length < 12; i++) {
+      var value = sample[i] & 255;
+      if (value < 248) out += chars.charAt(value % chars.length);
+    }
   }
   return out;
 }
 
 function authCanWriteOrder(session, payload) {
   if (!session) return { ok: false, message: 'Sesi tidak valid.' };
-  if (session.role === 'admin' || session.role === 'omc') return { ok: true };
+  if (session.role === 'admin') return { ok: true };
+  if (session.role === 'omc') {
+    var account = authFindUser(session.username);
+    var master = readMasterJson() || { personil: [], sites: [], units: [] };
+    var person = (master.personil || []).find(function (p) { return String(p.id || '').trim().toLowerCase() === session.username; });
+    if (!account || account.role !== 'omc' || !person || account.nop !== session.nop || person.nop !== session.nop) {
+      return { ok: false, message: 'Akun OMC atau NOP sudah tidak aktif.' };
+    }
+    var orderNop = String(payload.nop || '').trim();
+    if (!orderNop) {
+      var master = readMasterJson() || { sites: [] };
+      var siteId = String(payload.siteDestinasi || '').split(' ')[0];
+      var site = (master.sites || []).find(function (s) { return s.siteId === siteId || s.nama === payload.siteDestinasi; });
+      orderNop = site ? String(site.nop || '') : '';
+    }
+    return orderNop && orderNop === session.nop
+      ? { ok: true }
+      : { ok: false, message: 'OMC hanya boleh mengubah tiket untuk NOP akunnya.' };
+  }
   if (session.role === 'mbp') {
     var oid = String(payload.orderId || '').trim();
-    if (!oid || oid !== String(session.orderId || '').trim()) {
+    var row = findOrderRowById(oid);
+    if (!oid || oid !== String(session.orderId || '').trim() || !row || row.namaMbp !== session.namaMbp) {
       return { ok: false, message: 'MBP hanya boleh mengubah tiket dari link mereka.' };
     }
     return { ok: true };

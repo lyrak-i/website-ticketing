@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#ffffff" />
   <title>MBP Command & Field Monitor</title>
-  <link rel="stylesheet" href="css/app.css?v=702d6abd24">
+  <link rel="stylesheet" href="css/app.css?v=629a68ffa4">
 </head>
 <body class="min-h-screen flex flex-col bg-surface-2 selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
 
@@ -35,11 +35,8 @@
         <button id="loginSubmit" type="submit" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition">Masuk</button>
       </form>
 
-      <div id="loginFooter" class="hidden mt-4 pt-3 border-t border-line text-[11px] text-muted leading-relaxed space-y-2">
-        <p id="loginNotice"></p>
-        <button id="demoLoginBtn" onclick="startDemoMode()" class="w-full py-2 rounded-xl bg-surface-3 hover:bg-surface-2 text-body text-xs font-semibold border border-line-strong">
-          Masuk Mode Demo (tanpa server)
-        </button>
+      <div id="loginFooter" class="mt-4 pt-3 border-t border-line text-[11px] text-muted leading-relaxed space-y-2">
+        <p id="loginNotice">Login memerlukan backend Google Apps Script.</p>
       </div>
     </div>
   </div>
@@ -339,33 +336,6 @@
         <p class="text-xs text-muted mt-0.5">Personil OMC, Site List, dan Unit MBP. Login OMC memakai ID personil (mis. psn-01) + NOP dari tabel ini.</p>
       </div>
 
-      <div class="bg-surface border border-line rounded-2xl overflow-hidden shadow-sm">
-        <div class="p-3.5 sm:p-5 border-b border-line flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 class="text-sm font-bold text-body">Akun Login (server)</h3>
-            <p class="text-[11px] text-muted mt-0.5">Username &amp; reset password disimpan di tab <code class="font-mono text-[10px]">Auth_Users</code> pada Sheets. Password baru ditampilkan sekali setelah reset.</p>
-          </div>
-          <button type="button" onclick="loadAdminAuthUsers(true)" class="px-3 py-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-xs font-semibold text-body border border-line-strong">Muat ulang</button>
-        </div>
-        <div class="overflow-x-auto table-scroll">
-          <table class="w-full text-left border-collapse min-w-[520px]">
-            <thead>
-              <tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                <th class="py-2.5 px-3">Username</th>
-                <th class="py-2.5 px-3">Nama</th>
-                <th class="py-2.5 px-3">Role</th>
-                <th class="py-2.5 px-3">NOP</th>
-                <th class="py-2.5 px-3">Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="adminAuthUsersBody" class="divide-y divide-line/70">
-              <tr><td colspan="5" class="py-4 text-center text-xs text-muted">Buka tab Admin &amp; muat daftar akun.</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p id="adminAuthHint" class="px-4 pb-4 text-[11px] text-faint hidden"></p>
-      </div>
-
       <div class="bg-surface border border-line rounded-2xl p-4 sm:p-5 shadow-sm flex flex-wrap items-end gap-3">
         <div class="min-w-[12rem] flex-1">
           <label for="adminNopFilter" class="block text-xs font-medium text-body mb-1">Filter tampilan per NOP</label>
@@ -396,6 +366,29 @@
             <tbody id="adminFleetStatusBody" class="divide-y divide-line/70"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Kelola akun server-side -->
+      <div id="adminAccountsPanel" class="hidden bg-surface border border-line rounded-2xl overflow-hidden shadow-sm">
+        <div class="p-3.5 sm:p-5 border-b border-line flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-body">Akun Login OMC</h3>
+          <p class="text-[11px] text-muted mt-0.5">Admin memasukkan password baru; server hanya menyimpan hash. Password lama tidak dapat dibaca.</p>
+          </div>
+          <button type="button" onclick="loadAdminAuthUsers()" class="px-2.5 py-1 rounded-lg bg-surface-3 text-body text-[11px] font-semibold">Muat akun</button>
+        </div>
+        <div id="adminAuthNotice" class="hidden px-3.5 py-2 text-xs"></div>
+        <div class="overflow-x-auto table-scroll">
+          <table class="w-full text-left border-collapse min-w-[620px]">
+            <thead><tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted"><th class="py-2.5 px-3">Username</th><th class="py-2.5 px-3">Nama</th><th class="py-2.5 px-3">NOP</th><th class="py-2.5 px-3">Role</th><th class="py-2.5 px-3">Aksi</th></tr></thead>
+            <tbody id="adminAuthUsersBody" class="divide-y divide-line/70"></tbody>
+          </table>
+        </div>
+        <div class="p-3.5 border-t border-line flex flex-wrap items-end gap-2">
+          <label class="text-xs text-muted">Personil OMC <select id="adminAuthPersonSelect" class="ml-1 bg-surface-2 border border-line-strong rounded-lg px-2 py-1.5 text-body"></select></label>
+          <label class="text-xs text-muted">Password baru <input id="adminAuthNewPassword" type="password" autocomplete="new-password" minlength="8" class="ml-1 bg-surface-2 border border-line-strong rounded-lg px-2 py-1.5 text-body" /></label>
+          <button type="button" onclick="adminSetSelectedAuthPassword()" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold">Buat akun / atur password</button>        </div>
+        <p id="adminAuthPasswordNotice" class="hidden mx-3.5 mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 text-sm text-emerald-800"></p>
       </div>
 
       <!-- Form Tambah / Edit -->
@@ -497,7 +490,7 @@
       </div>
       <div class="flex items-center justify-end gap-2 pt-2">
         <button onclick="resetDemoData()" class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/30 text-xs font-semibold mr-auto">
-          Reset Demo
+          Reset Data Lokal
         </button>
         <button onclick="toggleConfigModal()" class="px-3.5 py-1.5 rounded-xl bg-surface-3 text-body text-xs font-semibold">
           Batal
@@ -509,9 +502,8 @@
     </div>
   </div>
 
-  <script defer src="js/config.js?v=a08166c8d7"></script>
-  <script defer src="js/demo-users.js?v=9353da1cfc"></script>
-  <script defer src="js/auth.js?v=c7c6a81004"></script>
-  <script defer src="js/app.js?v=9d1dc186fa"></script>
+  <script defer src="js/config.js?v=485b4677f0"></script>
+  <script defer src="js/auth.js?v=5f9541a38a"></script>
+  <script defer src="js/app.js?v=cb2d80e4dd"></script>
 </body>
 </html>

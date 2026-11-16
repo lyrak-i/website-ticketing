@@ -18,10 +18,18 @@ ASSET_RE = re.compile(r'((?:href|src)=")(css/app\.css|js/[A-Za-z0-9._-]+\.js)\?v
 
 
 def file_hash(rel: str) -> str:
+    """Hash file dengan line ending dinormalisasi ke LF.
+
+    Git menyimpan blob dengan LF (lihat .gitattributes), sementara checkout di
+    Windows bisa mengubahnya jadi CRLF. Kalau hash dihitung dari byte mentah,
+    ?v= tidak akan cocok dengan file yang benar-benar di-deploy. Jadi dinormalisasi
+    dulu supaya hasilnya deterministik di semua platform.
+    """
     path = ROOT / rel
     if not path.exists():
         raise SystemExit(f'File tidak ditemukan: {rel}')
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+    data = path.read_bytes().replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    return hashlib.sha256(data).hexdigest()[:10]
 
 
 def main() -> None:
@@ -36,7 +44,7 @@ def main() -> None:
 
         out = ASSET_RE.sub(repl, src)
         if out != src:
-            p.write_text(out, encoding='utf-8', newline='')
+            p.write_text(out, encoding='utf-8', newline='\n')
             changed = True
             print(f'  {page}: di-stamp')
         else:

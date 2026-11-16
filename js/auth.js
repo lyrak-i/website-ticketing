@@ -1,52 +1,19 @@
-// ===================================================================
-// AUTH LOKAL & MAGIC LINK MBP (OPTIMIZED FOR LOW-END MOBILE)
-// ===================================================================
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-let currentUser = null;
-
-// Baca parameter URL SEGERA saat script dimuat (sebelum DOM / window.load)
 const INITIAL_URL_PARAMS = new URLSearchParams(window.location.search);
 const HAS_MAGIC_LINK = !!(INITIAL_URL_PARAMS.get('tkn') && INITIAL_URL_PARAMS.get('oid') && INITIAL_URL_PARAMS.get('mbp'));
-
-// Jika link WA membawa URL Google Apps Script (&gas=...), langsung simpan otomatis untuk user baru!
 const incomingGasUrl = INITIAL_URL_PARAMS.get('gas');
-if (incomingGasUrl && incomingGasUrl.startsWith('https://script.google.com/')) {
-  localStorage.setItem(STORAGE_KEY_URL, incomingGasUrl);
-  if (typeof gasWebAppUrl !== 'undefined') {
-    gasWebAppUrl = incomingGasUrl;
+if (incomingGasUrl) {
+  try {
+    const parsedGasUrl = new URL(incomingGasUrl);
+    if (parsedGasUrl.origin === 'https://script.google.com' && parsedGasUrl.pathname.endsWith('/exec')) {
+      localStorage.setItem(STORAGE_KEY_URL, incomingGasUrl);
+      if (typeof gasWebAppUrl !== 'undefined') gasWebAppUrl = incomingGasUrl;
+    }
+  } catch (err) {
+    console.warn('URL Apps Script pada link tidak valid.');
   }
 }
 
-function hexToBytes(hex) {
-  const out = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
-  return out;
-}
-
-async function verifyPassword(password, storedHash) {
-  const parts = String(storedHash || '').split('$');
-  if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
-
-  const iterations = parseInt(parts[1], 10);
-  if (!iterations || iterations < 1) return false;
-
-  const salt = hexToBytes(parts[2]);
-  const expected = hexToBytes(parts[3]);
-  if (!expected.length) return false;
-
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, expected.length * 8
-  );
-  const actual = new Uint8Array(bits);
-
-  let diff = 0;
-  for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
-  return diff === 0;
-}
+let currentUser = null;
 
 function saveSession(user) {
   localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
@@ -56,342 +23,166 @@ function saveSession(user) {
     unit: user.unit || '',
     nop: user.nop || '',
     orderId: user.orderId || '',
-    token: user.token || '',
-    sessionToken: user.sessionToken || '',
+    namaMbp: user.namaMbp || '',
+    sessionToken: user.sessionToken,
     loginAt: Date.now()
   }));
 }
 
 function readSession() {
   try {
-    const raw = localStorage.getItem(AUTH_SESSION_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s || !s.username) return null;
-    if (Date.now() - (s.loginAt || 0) > SESSION_TTL_MS) {
-      localStorage.removeItem(AUTH_SESSION_KEY);
-      return null;
-    }
-    return s;
+    const session = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY));
+    return session?.sessionToken ? session : null;
   } catch (err) {
-    localStorage.removeItem(AUTH_SESSION_KEY);
     return null;
   }
 }
 
-function isDemoMode() {
-  const activeUrl = (typeof gasWebAppUrl !== 'undefined' && gasWebAppUrl) || localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
-  return !activeUrl;
-}
+function isDemoMode() { return false; }
 
-function applyUser(user, demo) {
+function applyUser(user) {
   currentUser = user;
   const isMbp = user.role === 'mbp';
-
-  // 1. Sembunyikan layar login
-  const login = document.getElementById('loginScreen');
-  if (login) {
-    login.classList.add('hidden');
-    login.classList.remove('flex');
-  }
-
-  // 2. Tampilkan identitas user
+  document.getElementById('loginScreen')?.classList.add('hidden');
+  document.getElementById('loginScreen')?.classList.remove('flex');
   const badge = document.getElementById('userBadge');
-  if (badge) {
-    badge.classList.remove('hidden');
-    badge.classList.add('flex');
-  }
-  const nameEl = document.getElementById('userName');
-  if (nameEl) nameEl.textContent = user.name;
-  const roleEl = document.getElementById('userRole');
-  if (roleEl) {
-    const nopNote = user.role === 'omc' && user.nop ? ` · NOP ${user.nop}` : '';
-    roleEl.textContent = isMbp ? `Tiket: ${user.orderId || '-'}` : (demo ? `${user.role} (demo)${nopNote}` : `${user.role}${nopNote}`);
-  }
-
-  // 3. Khusus Teknisi MBP (Orang Awam / HP Low-End):
-  // Sembunyikan Role Switcher, Tombol API, dan Tombol Keluar agar tidak salah pencet
-  const switcher = document.getElementById('roleSwitcher');
-  if (switcher) switcher.classList.toggle('hidden', !demo || isMbp);
-
-  const apiBtn = document.querySelector('button[onclick="toggleConfigModal()"]');
-  if (apiBtn) apiBtn.classList.toggle('hidden', isMbp);
-
-  const logoutBtn = document.querySelector('button[onclick="logout()"]');
-  if (logoutBtn) logoutBtn.classList.toggle('hidden', isMbp);
-
-  // 4. Kunci pilihan unit MBP & sembunyikan dropdown pilih unit agar layar lebih ringkas
-  const mobSelect = document.getElementById('mobileMbpSelect');
-  if (isMbp && user.unit) {
-    const unit = fleetList.find(m => m.namaMbp === user.unit || m.namaMbp.startsWith(user.unit));
-    if (unit) {
-      selectedMobileMbp = unit.namaMbp;
-      if (mobSelect) {
-        mobSelect.value = unit.namaMbp;
-        mobSelect.disabled = true;
-      }
-    }
-  } else if (mobSelect) {
-    mobSelect.disabled = false;
-  }
-
-  // 5. Paksa pindah ke tampilan sesuai role (MBP -> viewMbp)
-  if (typeof switchRole === 'function') {
-    switchRole(user.role === 'admin' ? 'admin' : user.role);
-  }
+  badge?.classList.remove('hidden');
+  badge?.classList.add('flex');
+  const name = document.getElementById('userName');
+  const role = document.getElementById('userRole');
+  if (name) name.textContent = user.name;
+  if (role) role.textContent = isMbp ? `Tiket: ${user.orderId || '-'}` : `${user.role}${user.nop ? ` · NOP ${user.nop}` : ''}`;
+  const isAdmin = user.role === 'admin';
+  document.getElementById('roleSwitcher')?.classList.toggle('hidden', isMbp || !isAdmin);
+  document.getElementById('tabAdmin')?.classList.toggle('hidden', !isAdmin);
+  document.querySelector('button[onclick="toggleConfigModal()"]')?.classList.toggle('hidden', isMbp || !isAdmin);
+  document.querySelector('button[onclick="logout()"]')?.classList.toggle('hidden', isMbp);
+  if (isMbp) selectedMobileMbp = user.unit;
+  if (!isMbp && typeof switchRole === 'function') switchRole(isAdmin ? 'admin' : 'omc');
   if (typeof refreshNopFilterUi === 'function') refreshNopFilterUi();
 }
 
-function showLoginError(msg) {
+function showLoginError(message) {
   const el = document.getElementById('loginError');
   if (!el) return;
-  el.textContent = msg;
+  el.textContent = message;
   el.classList.remove('hidden');
 }
 
 async function handleLoginSubmit(event) {
   event.preventDefault();
-  const username = (document.getElementById('loginUsername')?.value || '').trim().toLowerCase();
+  const username = document.getElementById('loginUsername')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value || '';
-  const errEl = document.getElementById('loginError');
-  if (errEl) errEl.classList.add('hidden');
-
-  const activeUrl = (typeof gasWebAppUrl !== 'undefined' && gasWebAppUrl) || localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
-  if (activeUrl && typeof gasPost === 'function') {
-    const json = await gasPost({ action: 'login', username, password }, { auth: false });
-    if (!json || json.status !== 'success') {
-      showLoginError((json && json.message) || 'Login gagal.');
-      return;
-    }
-    const user = { ...json.user, sessionToken: json.sessionToken };
-    saveSession(user);
-    applyUser(user, false);
-    if (typeof syncFromServer === 'function') await syncFromServer(true);
+  document.getElementById('loginError')?.classList.add('hidden');
+  const result = await gasPost({ action: 'login', username, password }, { auth: false });
+  if (result.status !== 'success') {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    showLoginError(result.message || 'Login gagal.');
     return;
   }
-
-  // Demo lokal tanpa backend
-  let user = DEMO_USERS.find(u => u.username === username);
-  if (!user && typeof masterData !== 'undefined' && Array.isArray(masterData.personil)) {
-    const personil = masterData.personil.find(p => String(p.id).toLowerCase() === username);
-    const omcBase = DEMO_USERS.find(u => u.username === 'omc');
-    if (personil && omcBase) {
-      user = {
-        username: String(personil.id).toLowerCase(),
-        name: personil.nama,
-        role: 'omc',
-        nop: personil.nop || '',
-        unit: '',
-        hash: omcBase.hash
-      };
-    }
-  }
-  if (!user) {
-    showLoginError('Username tidak dikenal.');
-    return;
-  }
-
-  if (user.role === 'mbp') {
-    showLoginError('Login manual hanya untuk OMC & Admin. Teknisi MBP wajib membuka link dari WhatsApp.');
-    return;
-  }
-
-  let ok = false;
-  try {
-    ok = await verifyPassword(password, user.hash);
-  } catch (err) {
-    showLoginError('Verifikasi gagal: ' + err.message);
-    return;
-  }
-  if (!ok) {
-    showLoginError('Password salah.');
-    return;
-  }
-
+  const user = { ...result.user, sessionToken: result.sessionToken };
   saveSession(user);
-  applyUser(user, true);
+  applyUser(user);
+  await syncFromServer(true);
 }
 
 async function tryMagicLinkAuth() {
   if (!HAS_MAGIC_LINK) return false;
-
-  const tkn = INITIAL_URL_PARAMS.get('tkn');
-  const oid = INITIAL_URL_PARAMS.get('oid');
-  const mbp = INITIAL_URL_PARAMS.get('mbp');
+  const token = INITIAL_URL_PARAMS.get('tkn');
+  const orderId = INITIAL_URL_PARAMS.get('oid');
+  const namaMbp = INITIAL_URL_PARAMS.get('mbp');
   const site = INITIAL_URL_PARAMS.get('site') || '-';
-  const prio = INITIAL_URL_PARAMS.get('prio') || 'Medium';
-
-  // Pastikan gasWebAppUrl di app.js memakai URL terbaru
-  if (incomingGasUrl && typeof gasWebAppUrl !== 'undefined') {
-    gasWebAppUrl = incomingGasUrl;
-    if (typeof updateConnectionBadge === 'function') updateConnectionBadge();
-  }
-
-  let magicGate = null;
-  if (gasWebAppUrl && typeof gasPost === 'function') {
-    magicGate = await gasPost({ action: 'validateMagicLink', orderId: oid, token: tkn, namaMbp: mbp }, { auth: false });
-    if (!magicGate || magicGate.status !== 'success') {
-      showLoginError((magicGate && magicGate.message) || 'Link tugas tidak valid.');
-      return true;
-    }
-  }
-
-  // Bersihkan URL bar agar rapi dan tidak di-bookmark mentah
+  const priority = INITIAL_URL_PARAMS.get('prio') || 'Medium';
+  const result = await gasPost({ action: 'validateMagicLink', orderId, token, namaMbp }, { auth: false });
   const cleanUrl = window.location.origin + window.location.pathname;
   window.history.replaceState({}, document.title, cleanUrl);
-
-  // Pastikan unit MBP ada di fleetList
-  let unit = fleetList.find(m => m.namaMbp === mbp || m.namaMbp.startsWith(mbp));
-  if (!unit && fleetList.length > 0) {
-    unit = fleetList[0];
+  if (result.status !== 'success') {
+    document.getElementById('loginScreen')?.classList.remove('hidden');
+    showLoginError(result.message || 'Link tugas tidak valid.');
+    return true;
   }
-
-  // Langsung siapkan sesi dan buka tampilan MBP seketika (tanpa menunggu jaringan lambat)
-  const mbpUser = {
-    username: `mbp_${oid}`,
-    name: unit ? unit.namaMbp : mbp,
-    role: 'mbp',
-    unit: unit ? unit.namaMbp : mbp,
-    orderId: oid,
-    token: tkn
-  };
-
-  if (unit && (statusKey(unit.status) === 'idle' || statusKey(unit.status) === 'belum_otw')) {
-    const dispatchedAt = unit.pendingOrder?.dispatchedAt || new Date().toISOString();
-    unit.pendingOrder = {
-      orderId: oid,
-      token: tkn,
-      siteDestinasi: site,
-      linkMapsSite: typeof getSiteMapsUrl === 'function' ? getSiteMapsUrl(site) : '#',
-      prioritas: prio,
-      nop: typeof siteNopOf === 'function' ? siteNopOf(site) : '',
-      dispatchedAt
-    };
+  const user = { ...result.user, sessionToken: result.sessionToken };
+  let unit = fleetList.find(item => item.namaMbp === user.unit || item.id === user.unit);
+  if (!unit) {
+    await syncFromServer(true);
+    unit = fleetList.find(item => item.namaMbp === user.unit || item.id === user.unit);
+  }
+  if (!unit) {
+    await gasPost({ action: 'logout', sessionToken: result.sessionToken }, { auth: false });
+    document.getElementById('loginScreen')?.classList.remove('hidden');
+    showLoginError('Unit MBP pada link tidak ditemukan. Hubungi OMC.');
+    return true;
+  }
+  if (['idle', 'belum_otw'].includes(statusKey(unit.status))) {
+    const dispatchedAt = new Date().toISOString();
+    unit.pendingOrder = { orderId, token, siteDestinasi: site, linkMapsSite: getSiteMapsUrl(site), prioritas: priority, nop: siteNopOf(site), dispatchedAt };
     unit.status = 'belum_otw';
-    unit.activeOrderId = oid;
+    unit.activeOrderId = orderId;
     unit.activeSite = site;
-    unit.activePriority = prio;
-    unit.estimasiEta = '-';
+    unit.activePriority = priority;
     unit.tsCurrentStatusStart = dispatchedAt;
   }
-
-  if (magicGate && magicGate.status === 'success') {
-    const merged = { ...mbpUser, ...magicGate.user, sessionToken: magicGate.sessionToken, token: tkn };
-    saveSession(merged);
-    applyUser(merged, false);
-  } else {
-    saveSession(mbpUser);
-    applyUser(mbpUser, isDemoMode());
-  }
-  if (typeof renderAll === 'function') renderAll();
-
-  // Validasi ke Google Sheets di latar belakang
-  if (gasWebAppUrl && typeof syncFromServer === 'function') {
-    await syncFromServer(true);
-    const existingOrder = orderList.find(o => o.orderId === oid);
-    if (existingOrder) {
-      if (statusKey(existingOrder.status) === 'selesai') {
-        logout();
-        showLoginError(`Tiket ${oid} sudah SELESAI. Link ini sudah tidak berlaku.`);
-        return true;
-      }
-      // Jika tiket masih berjalan di Sheets, pastikan pendingOrder dikosongkan karena sudah aktif
-      if (unit) unit.pendingOrder = null;
-    } else if (unit && (statusKey(unit.status) === 'idle' || statusKey(unit.status) === 'belum_otw')) {
-      // Kembalikan pendingOrder jika di Sheets belum tercatat (karena baru akan dibuat saat klik Terima & OTW)
-      const dispatchedAt = unit.pendingOrder?.dispatchedAt || new Date().toISOString();
-      unit.pendingOrder = {
-        orderId: oid,
-        token: tkn,
-        siteDestinasi: site,
-        linkMapsSite: typeof getSiteMapsUrl === 'function' ? getSiteMapsUrl(site) : '#',
-        prioritas: prio,
-        nop: typeof siteNopOf === 'function' ? siteNopOf(site) : '',
-        dispatchedAt
-      };
-      unit.status = 'belum_otw';
-      unit.activeOrderId = oid;
-      unit.activeSite = site;
-      unit.activePriority = prio;
-      unit.tsCurrentStatusStart = dispatchedAt;
-    }
-    if (typeof saveAndBroadcast === 'function') saveAndBroadcast();
-  }
-
+  saveSession(user);
+  applyUser(user);
+  renderAll();
+  await syncFromServer(true);
   return true;
 }
 
-function checkMbpSessionExpiry() {
-  if (!currentUser || currentUser.role !== 'mbp' || !currentUser.orderId) return;
-  const ord = orderList.find(o => o.orderId === currentUser.orderId);
-  if (ord && statusKey(ord.status) === 'selesai') {
-    logout();
-    showLoginError(`Terima kasih! Tugas tiket ${currentUser.orderId} telah dikonfirmasi SELESAI oleh OMC.`);
+async function checkMbpSessionExpiry() {
+  if (currentUser?.role === 'mbp' && currentUser.orderId) {
+    const order = orderList.find(item => item.orderId === currentUser.orderId);
+    if (order && statusKey(order.status) === 'selesai') {
+      const orderId = currentUser.orderId;
+      await logout();
+      showLoginError(`Terima kasih! Tugas tiket ${orderId} telah selesai.`);
+    }
   }
-}
-
-function startDemoMode() {
-  const user = { username: 'demo', name: 'Mode Demo (OMC)', role: 'omc', unit: '' };
-  saveSession(user);
-  applyUser(user, true);
 }
 
 async function logout() {
   const session = readSession();
-  if (session?.sessionToken && gasWebAppUrl && typeof gasPost === 'function') {
-    await gasPost({ action: 'logout', sessionToken: session.sessionToken }, { auth: false });
-  }
+  if (session?.sessionToken) await gasPost({ action: 'logout', sessionToken: session.sessionToken }, { auth: false });
   localStorage.removeItem(AUTH_SESSION_KEY);
   currentUser = null;
-
-  const login = document.getElementById('loginScreen');
-  if (login) {
-    login.classList.remove('hidden');
-    login.classList.add('flex');
-  }
-  const badge = document.getElementById('userBadge');
-  if (badge) badge.classList.add('hidden');
-  const switcher = document.getElementById('roleSwitcher');
-  if (switcher) switcher.classList.add('hidden');
-
-  const pwd = document.getElementById('loginPassword');
-  if (pwd) pwd.value = '';
+  if (login) login.classList.remove('hidden');
+  login?.classList.add('flex');
+  document.getElementById('userBadge')?.classList.add('hidden');
+  document.getElementById('roleSwitcher')?.classList.add('hidden');
+  const password = document.getElementById('loginPassword');
+  if (password) password.value = '';
 }
 
-function initAuth() {
+async function initAuth() {
   const form = document.getElementById('loginForm');
   if (form) form.addEventListener('submit', handleLoginSubmit);
-
-  // Jika masuk dari link WA, langsung sembunyikan layar login sejak detik pertama
   if (HAS_MAGIC_LINK) {
-    const login = document.getElementById('loginScreen');
-    if (login) login.classList.add('hidden');
+    document.getElementById('loginScreen')?.classList.add('hidden');
     return;
   }
-
-  const footer = document.getElementById('loginFooter');
-  const notice = document.getElementById('loginNotice');
-  if (isDemoMode()) {
-    if (footer) footer.classList.remove('hidden');
-    if (notice) notice.textContent = 'Mode demo lokal — tanpa backend. OMC: omc / omc2026, Admin: admin / admin2026. MBP via link WhatsApp.';
-  } else if (notice) {
-    notice.textContent = 'Login diverifikasi server. OMC: username = ID personil (mis. psn-01). Admin kelola akun di tab Admin.';
+  const session = readSession();
+  if (!session) {
+    document.getElementById('loginScreen')?.classList.remove('hidden');
+    return;
   }
-
-  let session = readSession();
-  const activeUrl = (typeof gasWebAppUrl !== 'undefined' && gasWebAppUrl) || localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
-  if (session && activeUrl && !session.sessionToken) {
+  // Defer scripts run in document order, so app.js defines gasPost immediately after this file.
+  if (typeof gasPost !== 'function') {
     localStorage.removeItem(AUTH_SESSION_KEY);
-    session = null;
+    document.getElementById('loginScreen')?.classList.remove('hidden');
+    showLoginError('Backend belum siap dimuat. Muat ulang halaman.');
+    return;
   }
-  if (session) {
-    const login = document.getElementById('loginScreen');
-    if (login) login.classList.add('hidden');
+  const result = await gasPost({ action: 'validateSession', sessionToken: session.sessionToken }, { auth: false });
+  if (result.status === 'success') {
+    const user = { ...result.user, sessionToken: session.sessionToken };
+    saveSession(user);
+    applyUser(user);
+  } else {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    document.getElementById('loginScreen')?.classList.remove('hidden');
+    showLoginError(result.message || 'Sesi tidak bisa divalidasi. Login ulang.');
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAuth);
-} else {
-  initAuth();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAuth, { once: true });
+else initAuth();
