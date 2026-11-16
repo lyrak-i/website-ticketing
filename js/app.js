@@ -383,13 +383,11 @@ function initApp() {
   refreshNopFilterUi();
 
   if (hasMagicLink) {
-    setInterval(tickTimers, 1000);
     Promise.resolve().then(() => tryMagicLinkAuth()).catch(err => {
       document.getElementById('loginScreen')?.classList.remove('hidden');
       document.getElementById('loginScreen')?.classList.add('flex');
       showLoginError(err.message || 'Gagal membuka link tugas.');
     });
-    return;
   } else if (savedSession?.role === 'mbp') {
     Promise.resolve().then(async () => {
       const result = await gasPost({ action: 'validateSession', sessionToken: savedSession.sessionToken }, { auth: false });
@@ -401,7 +399,7 @@ function initApp() {
     });
   } else if (savedSession) {
     Promise.resolve().then(() => initAuth());
-  } else if (!hasMagicLink) {
+  } else {
     renderAll();
   }
 
@@ -409,7 +407,7 @@ function initApp() {
     if (gasWebAppUrl && readSession()) await syncFromServer(false);
   }
   runSync();
-  setInterval(runSync, 10000);
+  setInterval(runSync, SYNC_INTERVAL_MS);
   if (typeof checkMbpSessionExpiry === 'function') setInterval(checkMbpSessionExpiry, 5000);
 }
 
@@ -1012,8 +1010,11 @@ async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
 function showFeedback() {
   const fb = document.getElementById('mobileSyncFeedback');
   if (fb) {
-    fb.classList.remove('hidden');
-    setTimeout(() => fb.classList.add('hidden'), 2000);
+    fb.textContent = 'Tersimpan';
+    fb.classList.remove('hidden', 'text-rose-700');
+    fb.classList.add('text-emerald-700');
+    clearTimeout(fb.__hideTimer);
+    fb.__hideTimer = setTimeout(() => fb.classList.add('hidden'), 2000);
   }
 }
 
@@ -1207,14 +1208,17 @@ function renderMobileView() {
   const palette = BTN_CLS[step.cls] || BTN_CLS.amber;
   const btn = document.getElementById('btnMbpAction');
   if (btn) {
-    const base = 'status-btn w-full py-3.5 px-4 rounded-xl border-2 flex items-center justify-center transition-colors';
+    const base = 'status-btn w-full py-6 px-5 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-colors';
     const tone = step.disabled ? palette.idle : palette.active;
     btn.disabled = !!step.disabled;
     btn.className = `${base} ${tone}`;
     const labelEl = btn.querySelector('[data-btn-label]');
     const hintEl = btn.querySelector('[data-btn-hint]');
     if (labelEl) labelEl.textContent = step.label;
-    if (hintEl) hintEl.textContent = step.hint;
+    if (hintEl) {
+      hintEl.textContent = step.hint;
+      hintEl.classList.toggle('hidden', !step.hint || step.disabled);
+    }
   }
 }
 
@@ -1359,7 +1363,8 @@ function notifySyncError(message) {
     feedback.textContent = 'Gagal simpan: ' + message;
     feedback.classList.remove('hidden', 'text-emerald-700');
     feedback.classList.add('text-rose-700');
-    setTimeout(() => feedback.classList.add('hidden'), 5000);
+    clearTimeout(feedback.__hideTimer);
+    feedback.__hideTimer = setTimeout(() => feedback.classList.add('hidden'), 5000);
   }
   updateConnectionBadge(false, 'Sync gagal');
 }
@@ -1382,23 +1387,31 @@ async function gasPost(payload, { auth = true } = {}) {
     body.sessionToken = getApiSessionToken();
     if (!body.sessionToken) return { status: 'error', message: 'Sesi habis. Login ulang.' };
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
   try {
     const res = await fetch(gasWebAppUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body), redirect: 'follow'
+      body: JSON.stringify(body), redirect: 'follow', signal: controller.signal
     });
     const json = await res.json();
     if (json.status === 'success' && !Array.isArray(json.data)) applyMasterResponse({ masterData: json.masterData });
     if (json.status === 'success') {
-      if (Array.isArray(json.data)) applyServerPayload(json);
+      // 'read' handled by syncFromServer (applyServerPayload + saveAndBroadcast).
+      if (Array.isArray(json.data) && body.action !== 'read') applyServerPayload(json);
     } else {
       if (/sesi tidak valid|kedaluwarsa/i.test(json.message || '')) logout();
       notifySyncError(json.message || 'Server menolak permintaan');
     }
     return json;
   } catch (err) {
-    notifySyncError(err.message || String(err));
-    return { status: 'error', message: err.message || String(err) };
+    const message = err.name === 'AbortError'
+      ? 'Server tidak merespons dalam ' + Math.round(SYNC_TIMEOUT_MS / 1000) + ' detik.'
+      : (err.message || String(err));
+    notifySyncError(message);
+    return { status: 'error', message };
+  } finally {
+    clearTimeout(timer);
   }
 }
 window.gasPost = gasPost;
@@ -1406,31 +1419,15 @@ window.gasPost = gasPost;
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');
   if (!gasWebAppUrl || isSyncing) return;
-  if (currentUser?.role === 'mbp') {
-    const sessionToken = getApiSessionToken();
-    if (!sessionToken) return;
-    isSyncing = true;
-    try {
-      const json = await gasPost({ action: 'read' });
-      if (json.status !== 'success') return;
-      const accepted = applyServerPayload(json);
-      if (accepted && typeof saveAndBroadcast === 'function') saveAndBroadcast();
-      if (showSpinner && accepted && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
-    } catch (err) {
-      notifySyncError(err.message || String(err));
-    } finally {
-      isSyncing = false;
-    }
-    return;
-  }
   const sessionToken = getApiSessionToken();
   if (!sessionToken) return;
   isSyncing = true;
   try {
     const json = await gasPost({ action: 'read' });
     if (json.status !== 'success') return;
-    const ok = applyServerPayload(json);
-    if (showSpinner && ok && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
+    const accepted = applyServerPayload(json);
+    if (accepted && typeof saveAndBroadcast === 'function') saveAndBroadcast();
+    if (showSpinner && accepted && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
   } catch (err) {
     notifySyncError(err.message || String(err));
   } finally {
