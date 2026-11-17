@@ -473,24 +473,19 @@ window.handleMbpDispatchChange = handleMbpDispatchChange;
 
 function populateSelectDropdowns() {
   const omcSelect = document.getElementById('dispatchMbpSelect');
-  const currentOmc = omcSelect?.value || fleetInScope()[0]?.namaMbp;
   const scopedFleet = fleetInScope();
+  const currentOmc = omcSelect?.value || scopedFleet[0]?.namaMbp;
+
   if (omcSelect) {
     omcSelect.innerHTML = scopedFleet.map(m =>
       `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)} — [${escapeHtml(STATUS_LABEL[statusKey(m.status)])}]</option>`
     ).join('');
     omcSelect.value = scopedFleet.some(m => m.namaMbp === currentOmc) ? currentOmc : (scopedFleet[0]?.namaMbp || '');
   }
-  const siteSelect = document.getElementById('dispatchSiteSelect');
-  if (siteSelect) {
-    const currentSite = siteSelect.value;
-    const sites = sitesInScope();
-    siteSelect.innerHTML = sites.map(s =>
-      `<option value="${escapeHtml(s.nama || s.siteId)}">${escapeHtml(s.nama || s.siteId)} — NOP ${escapeHtml(s.nop)}</option>`
-    ).join('');
-    if (currentSite && sites.some(s => s.siteId === currentSite || s.nama === currentSite)) {
-      siteSelect.value = currentSite;
-    }
+
+  const siteInput = document.getElementById('dispatchSiteSelect');
+  if (siteInput && document.activeElement !== siteInput) {
+    refreshSiteDatalist(siteInput.value);
   }
 
   handleMbpDispatchChange();
@@ -1344,6 +1339,24 @@ function applySheetRecords(sheetRecords) {
 }
 
 let isSyncing = false;
+let lastServerDataHash = '';
+
+// ponytail: batasi 30 option di datalist agar main thread tidak freeze saat autocomplete, upgrade when: daftar site > 50.000 baris butuh virtual list
+function refreshSiteDatalist(query = '') {
+  const siteList = document.getElementById('dispatchSiteList');
+  if (!siteList) return;
+  const q = query.trim().toLowerCase();
+  const sites = sitesInScope();
+  const matched = (q
+    ? sites.filter(s => (s.siteId + ' ' + (s.nama || '')).toLowerCase().includes(q))
+    : sites
+  ).slice(0, 30);
+
+  siteList.innerHTML = matched.map(s => {
+    const label = s.nama && s.nama !== s.siteId ? `${s.siteId} — ${s.nama}` : s.siteId;
+    return `<option value="${escapeHtml(s.siteId)}" label="${escapeHtml(label)}"></option>`;
+  }).join('');
+}
 
 function applyMasterResponse(json) {
   if (!json?.masterData || !Array.isArray(json.masterData.personil) || !Array.isArray(json.masterData.sites) || !Array.isArray(json.masterData.units)) return;
@@ -1464,8 +1477,15 @@ async function syncFromServer(showSpinner = false) {
   try {
     const json = await gasPost({ action: 'read' });
     if (json.status !== 'success') return;
+
+    const newHash = JSON.stringify([json.data, json.masterData]);
+    if (!showSpinner && newHash === lastServerDataHash) return;
+
     const accepted = applyServerPayload(json);
-    if (accepted && typeof saveAndBroadcast === 'function') saveAndBroadcast();
+    if (accepted) {
+      lastServerDataHash = newHash;
+      if (typeof saveAndBroadcast === 'function') saveAndBroadcast();
+    }
     if (showSpinner && accepted && syncText) syncText.textContent = 'Sync: ' + new Date().toLocaleTimeString('id-ID');
   } catch (err) {
     notifySyncError(err.message || String(err));

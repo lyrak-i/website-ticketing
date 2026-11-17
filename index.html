@@ -216,15 +216,13 @@
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-body mb-1">Site Destinasi</label>
-              <select id="dispatchSiteSelect" onchange="updateWaLink()" required class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500">
-                <option value="SITE-PLM-014 (Ilir Barat)" selected>SITE-PLM-014 (Ilir Barat)</option>
-                <option value="SITE-PLM-089 (Seberang Ulu)">SITE-PLM-089 (Seberang Ulu)</option>
-                <option value="SITE-PLM-102 (Sukarami)">SITE-PLM-102 (Sukarami)</option>
-                <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
-                <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
-                <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
-              </select>
+              <label for="dispatchSiteSelect" class="block text-xs font-medium text-body mb-1">Site Destinasi</label>
+              <input id="dispatchSiteSelect" list="dispatchSiteList"
+                    onfocus="refreshSiteDatalist(this.value)"
+                    oninput="refreshSiteDatalist(this.value); updateWaLink()"
+                    onchange="updateWaLink()" required placeholder="Ketik Site ID atau nama site..." autocomplete="off"
+                    class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500" />
+              <datalist id="dispatchSiteList"></datalist>
             </div>
 
             <!-- WhatsApp Message Preview -->
