@@ -185,33 +185,40 @@ const escapeHtml = str => String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp
 
 let fleetList = [];
 let orderList = [];
-const issuedOrderIds = new Set();
 
-// shortcut: id unik dijamin di browser ini saja, upgrade when: beberapa OMC dispatch bersamaan
+// Kolom prioritas masih ada di Sheet; OMC tidak lagi memilih prioritas di form.
+const DISPATCH_PRIORITAS = '-';
+
 function isOrderIdUsed(id) {
-  return orderList.some(o => o.orderId === id)
-    || fleetList.some(u => (u.pendingOrder && u.pendingOrder.orderId === id) || u.activeOrderId === id);
+  const trimmed = String(id || '').trim();
+  if (!trimmed || trimmed === '-') return false;
+  if (orderList.some(o => o.orderId === trimmed)) return true;
+  return fleetList.some(u => {
+    if (u.pendingOrder?.orderId === trimmed) return true;
+    return u.activeOrderId && u.activeOrderId !== '-' && u.activeOrderId === trimmed;
+  });
 }
 
-function makeOrderId() {
-  let t = Date.now();
-  let id;
-  do {
-    const d = new Date(t);
-    const pad = n => String(n).padStart(2, '0');
-    id = `ORD-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-    t += 1000;
-  } while (issuedOrderIds.has(id) || isOrderIdUsed(id));
-  issuedOrderIds.add(id);
-  return id;
-}
-
-function generateNewOrderId() {
-  const orderId = makeOrderId();
+function refreshDispatchOrderIdWarning() {
   const input = document.getElementById('dispatchOrderId');
-  if (input) input.value = orderId;
-  updateWaPreview();
-  return orderId;
+  const warning = document.getElementById('dispatchOrderIdWarning');
+  const btn = document.getElementById('btnKirimWa');
+  if (!input || !warning) return;
+  const orderId = input.value.trim();
+  const duplicate = orderId && orderId !== '-' && isOrderIdUsed(orderId);
+  warning.textContent = duplicate
+    ? 'Order ID ini sudah dipakai pada tiket/armada. Gunakan ID lain.'
+    : '';
+  warning.classList.toggle('hidden', !duplicate);
+  input.classList.toggle('border-rose-500', duplicate);
+  input.classList.toggle('focus:border-rose-500', duplicate);
+  input.setAttribute('aria-invalid', duplicate ? 'true' : 'false');
+  if (btn) {
+    btn.classList.toggle('opacity-50', duplicate);
+    btn.classList.toggle('pointer-events-none', duplicate);
+    btn.setAttribute('aria-disabled', duplicate ? 'true' : 'false');
+  }
+  return duplicate;
 }
 
 function getSeedFleet() {
@@ -378,7 +385,7 @@ function initApp() {
   if (!isMbpSession && !hasMagicLink) syncFleetFromMaster();
   updateConnectionBadge();
   populateSelectDropdowns();
-  if (document.getElementById('dispatchOrderId')) generateNewOrderId();
+  if (document.getElementById('dispatchOrderId')) updateWaLink();
   renderAdminTables();
   refreshNopFilterUi();
 
@@ -498,7 +505,7 @@ function generateDispatchToken() {
   return currentDispatchToken;
 }
 
-function buildMagicLinkUrl(orderId, namaMbp, site, prio, token) {
+function buildMagicLinkUrl(orderId, namaMbp, site, token) {
   // pathname bisa "/website-ticketing/" (Pages) atau "/index.html" (file lokal):
   // buang segmen terakhir agar hasilnya selalu direktori + mbp.html
   const dir = location.pathname.replace(/[^/]*$/, '');
@@ -507,8 +514,7 @@ function buildMagicLinkUrl(orderId, namaMbp, site, prio, token) {
     tkn: token,
     oid: orderId,
     mbp: namaMbp,
-    site: site,
-    prio: prio
+    site: site
   };
   // Otomatis sertakan URL Google Apps Script agar HP teknisi baru langsung terhubung!
   if (gasWebAppUrl) {
@@ -526,12 +532,11 @@ function updateWaLink() {
   if (phone.startsWith('0')) phone = '62' + phone.substring(1);
 
   const site = document.getElementById('dispatchSiteSelect')?.value || '...';
-  const prio = document.getElementById('dispatchPrioritySelect')?.value || 'High';
 
   if (!currentDispatchToken) generateDispatchToken();
-  const magicUrl = buildMagicLinkUrl(orderId, namaMbp, site, prio, currentDispatchToken);
+  const magicUrl = buildMagicLinkUrl(orderId, namaMbp, site, currentDispatchToken);
 
-  const waText = `[Order ID: ${orderId}] Ada masalah di site ${site} (Prioritas: ${prio}).\n\nKlik tautan khusus ini untuk membuka tugas & update status:\n${magicUrl}`;
+  const waText = `[Order ID: ${orderId}] Ada masalah di site ${site}.\n\nKlik tautan khusus ini untuk membuka tugas & update status:\n${magicUrl}`;
 
   const previewEl = document.getElementById('waPreviewText');
   if (previewEl) previewEl.textContent = waText;
@@ -540,6 +545,7 @@ function updateWaLink() {
   if (btn) {
     btn.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}` : '#';
   }
+  refreshDispatchOrderIdWarning();
 }
 
 function updateWaPreview() {
@@ -557,6 +563,11 @@ async function handleDispatchClick(event) {
   };
   if (dispatchButton?.dataset.dispatching === 'true') {
     event.preventDefault();
+    return;
+  }
+  if (refreshDispatchOrderIdWarning()) {
+    event.preventDefault();
+    document.getElementById('dispatchOrderId')?.focus();
     return;
   }
   if (dispatchButton) dispatchButton.dataset.dispatching = 'true';
@@ -599,15 +610,24 @@ async function dispatchTicket(event) {
     alert('Unit MBP sedang memegang tiket aktif. Pilih unit lain atau selesaikan tiket sebelumnya.');
     return;
   }
-  let orderId = document.getElementById('dispatchOrderId')?.value;
+  const orderId = document.getElementById('dispatchOrderId')?.value.trim();
   if (!orderId || orderId === '-') {
-    orderId = generateNewOrderId();
+    event.preventDefault();
+    alert('Order ID wajib diisi.');
+    document.getElementById('dispatchOrderId')?.focus();
+    return;
   }
+  if (isOrderIdUsed(orderId)) {
+    event.preventDefault();
+    alert('Order ID sudah dipakai. Gunakan ID lain.');
+    document.getElementById('dispatchOrderId')?.focus();
+    return;
+  }
+  const prioritas = DISPATCH_PRIORITAS;
 
   const namaMbp = document.getElementById('dispatchMbpSelect').value;
   let rawWa = document.getElementById('dispatchWaInput').value.replace(/\D/g, '');
   const siteDest = document.getElementById('dispatchSiteSelect').value;
-  const prioritas = document.getElementById('dispatchPrioritySelect').value;
   const linkMapsSite = getSiteMapsUrl(siteDest);
 
   if (rawWa.startsWith('0')) rawWa = '62' + rawWa.substring(1);
@@ -684,6 +704,11 @@ async function dispatchTicket(event) {
     if (response.status !== 'success') {
       clearPendingDispatch(unit);
       event.preventDefault();
+      const msg = response.message || 'Gagal menyimpan dispatch ke server.';
+      if (/sudah dipakai|duplicate|double/i.test(msg)) {
+        refreshDispatchOrderIdWarning();
+        alert(msg);
+      }
       return;
     }
   } else {
@@ -695,7 +720,8 @@ async function dispatchTicket(event) {
 
   if (dispatchButton && waHref) window.open(waHref, '_blank', 'noopener');
   setTimeout(() => {
-    generateNewOrderId();
+    const orderInput = document.getElementById('dispatchOrderId');
+    if (orderInput) orderInput.value = '';
     updateWaLink();
     renderAll();
   }, 150);
@@ -1061,6 +1087,7 @@ function renderOmcView() {
   const dispatchForm = document.getElementById('dispatchForm');
   const allowed = currentUser?.role === 'admin' || currentUser?.role === 'omc';
   if (dispatchForm) dispatchForm.classList.toggle('hidden', !allowed);
+  refreshDispatchOrderIdWarning();
   const total = scoped.length;
   const idleCount = scoped.filter(m => statusKey(m.status) === 'idle').length;
   const movingCount = scoped.filter(m => {

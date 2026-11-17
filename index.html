@@ -199,13 +199,9 @@
 
           <form id="dispatchForm" onsubmit="event.preventDefault()" class="space-y-3.5">
             <div>
-              <label class="block text-xs font-medium text-body mb-1">Order ID Baru (Otomatis)</label>
-              <div class="flex items-center gap-2">
-                <input id="dispatchOrderId" type="text" readonly class="w-full bg-surface-2/80 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm font-mono font-bold text-amber-700" />
-                <button type="button" onclick="generateNewOrderId()" class="p-2 rounded-xl bg-surface-3 hover:bg-surface-2 text-xs text-body border border-line-strong" title="Generate ID Baru">
-                  
-                </button>
-              </div>
+              <label for="dispatchOrderId" class="block text-xs font-medium text-body mb-1">Order ID</label>
+              <input id="dispatchOrderId" type="text" required oninput="updateWaLink()" placeholder="Masukkan Order ID" aria-describedby="dispatchOrderIdWarning" class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500" />
+              <p id="dispatchOrderIdWarning" role="alert" class="hidden mt-1 text-[11px] text-rose-600 font-medium"></p>
             </div>
 
             <div>
@@ -228,16 +224,6 @@
                 <option value="SITE-BTA-012 (Baturaja)">SITE-BTA-012 (Baturaja)</option>
                 <option value="SITE-PBM-033 (Prabumulih)">SITE-PBM-033 (Prabumulih)</option>
                 <option value="SITE-LLG-021 (Lubuklinggau)">SITE-LLG-021 (Lubuklinggau)</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-medium text-body mb-1">Prioritas Tiket</label>
-              <select id="dispatchPrioritySelect" onchange="updateWaLink()" class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500">
-                <option value="Critical">Critical (Genset Down / VIP)</option>
-                <option value="High" selected>High (Low Battery)</option>
-                <option value="Medium">Medium (PLN Padam)</option>
-                <option value="Low">Low (Standby / Patrol)</option>
               </select>
             </div>
 
@@ -503,7 +489,7 @@
   </div>
 
   <script defer src="js/config.js?v=d749b8fe64"></script>
-  <script defer src="js/auth.js?v=203ba2175a"></script>
-  <script defer src="js/app.js?v=5eddae5c44"></script>
+  <script defer src="js/auth.js?v=e8b6d3aaff"></script>
+  <script defer src="js/app.js?v=4439512e02"></script>
 </body>
 </html>

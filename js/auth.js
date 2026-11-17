@@ -152,7 +152,6 @@ async function tryMagicLinkAuth() {
   const orderId = INITIAL_URL_PARAMS.get('oid');
   const namaMbp = INITIAL_URL_PARAMS.get('mbp');
   const site = INITIAL_URL_PARAMS.get('site') || '-';
-  const priority = INITIAL_URL_PARAMS.get('prio') || 'Medium';
   currentUser = null;
   const result = await gasPost({ action: 'validateMagicLink', orderId, token, namaMbp }, { auth: false });
   if (result.status !== 'success') {
@@ -189,11 +188,11 @@ async function tryMagicLinkAuth() {
   }
   if (['idle', 'belum_otw'].includes(statusKey(unit.status))) {
     const dispatchedAt = new Date().toISOString();
-    unit.pendingOrder = { orderId, token, siteDestinasi: site, linkMapsSite: getSiteMapsUrl(site), prioritas: priority, nop: siteNopOf(site), dispatchedAt };
+    unit.pendingOrder = { orderId, token, siteDestinasi: site, linkMapsSite: getSiteMapsUrl(site), prioritas: '-', nop: siteNopOf(site), dispatchedAt };
     unit.status = 'belum_otw';
     unit.activeOrderId = orderId;
     unit.activeSite = site;
-    unit.activePriority = priority;
+    unit.activePriority = '-';
     unit.tsCurrentStatusStart = dispatchedAt;
   }
   saveSession(user);

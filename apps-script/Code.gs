@@ -79,10 +79,16 @@ function doPost(e) {
     if (action === 'updateStatus') {
       var can = authCanWriteOrder(auth.session, payload);
       if (!can.ok) return jsonOut({ status: 'error', message: can.message });
-      if (auth.session.role === 'omc' && auth.session.nop && payload.orderId) {
-        var existing = findOrderRowById(payload.orderId);
-        if (existing && existing.nop && existing.nop !== auth.session.nop) {
-          return jsonOut({ status: 'error', message: 'Tiket berada di NOP lain.' });
+      if (payload.orderId) {
+        var existingOrder = findOrderRowById(payload.orderId);
+        if (existingOrder) {
+          if (auth.session.role === 'omc' && auth.session.nop && existingOrder.nop && existingOrder.nop !== auth.session.nop) {
+            return jsonOut({ status: 'error', message: 'Tiket berada di NOP lain.' });
+          }
+          var dispatchStatus = String(payload.newStatus || payload.status || '');
+          if (/^belum\s*otw/i.test(dispatchStatus)) {
+            return jsonOut({ status: 'error', message: 'Order ID sudah dipakai. Gunakan ID lain.' });
+          }
         }
       }
       upsertRow(payload);
