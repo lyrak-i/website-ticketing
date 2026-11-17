@@ -442,12 +442,24 @@ function updateConnectionBadge(connected = false, label = '') {
   }
 }
 
-function handleMbpDispatchChange() {
+let lastDispatchMbpName = null;
+let lastDispatchWaValue = '';
+
+function handleMbpDispatchChange({ force = false } = {}) {
   const namaMbp = document.getElementById('dispatchMbpSelect')?.value;
   const waInput = document.getElementById('dispatchWaInput');
   if (!namaMbp || !waInput) return;
   const unit = fleetList.find(m => m.namaMbp === namaMbp);
-  if (unit?.noWa) waInput.value = unit.noWa;
+  const masterWa = unit?.noWa || '';
+  // Nomor WA ditulis ulang hanya bila unit berganti atau master data berubah.
+  // Refresh polling tidak boleh menimpa nomor yang sedang diketik manual OMC.
+  const unitChanged = namaMbp !== lastDispatchMbpName;
+  const masterChanged = masterWa !== lastDispatchWaValue;
+  if ((unitChanged || masterChanged || force) && masterWa) {
+    waInput.value = masterWa;
+    lastDispatchWaValue = masterWa;
+  }
+  lastDispatchMbpName = namaMbp;
   updateWaLink();
 }
 window.handleMbpDispatchChange = handleMbpDispatchChange;
