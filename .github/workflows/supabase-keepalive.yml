@@ -1,0 +1,17 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 2 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase RPC
+        run: |
+          curl -fsS -X POST "https://mkbqrwjwgsjjlbjmaobw.supabase.co/rest/v1/rpc/get_ticket_by_token" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rYnFyd2p3Z3Nqamxiam1hb2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MDAxODYsImV4cCI6MjExMDk3NjE4Nn0.FA-Vhm1FwzPEkVVapARvS8sIhBkaI6TDg4mCEu5Xn5U" \
+            -H "Content-Type: application/json" \
+            -d '{"p_order_id":"keepalive","p_token":"keepalive"}'
