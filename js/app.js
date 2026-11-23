@@ -1783,9 +1783,17 @@ function renderAdminFleetStatus() {
   if (!tbody) return;
   refreshNopFilterUi();
 
-  const rows = fleetInScope();
+  const q = (document.getElementById('adminSearch_fleet')?.value || '').trim().toLowerCase();
+  const rows = fleetInScope().filter(unit => {
+    if (!q) return true;
+    const cur = statusKey(unit.status);
+    const oid = cur === 'belum_otw' && unit.pendingOrder ? unit.pendingOrder.orderId : unit.activeOrderId;
+    const text = `${unit.namaMbp} ${oid || ''} ${STATUS_LABEL[cur] || cur}`.toLowerCase();
+    return text.includes(q);
+  });
+
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500 text-xs font-mono">Tidak ada unit armada</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500 text-xs font-mono">${q ? 'Tidak ada hasil' : 'Tidak ada unit armada'}</td></tr>`;
     return;
   }
 
@@ -1793,7 +1801,7 @@ function renderAdminFleetStatus() {
     `<option value="${k}">${escapeHtml(STATUS_LABEL[k])}</option>`
   ).join('');
 
-  tbody.innerHTML = rows.map((unit, i) => {
+  tbody.innerHTML = rows.map(unit => {
     const fleetIndex = fleetList.indexOf(unit);
     const cur = statusKey(unit.status);
     const pending = unit.pendingOrder;
@@ -1805,7 +1813,7 @@ function renderAdminFleetStatus() {
         <td class="py-2 px-3 text-xs font-mono text-amber-700 whitespace-nowrap">${escapeHtml(displayOid || '-')}</td>
         <td class="py-2 px-3 whitespace-nowrap">${getStatusBadgeHtml(unit.status)}</td>
         <td class="py-2 px-3 whitespace-nowrap">
-          <select id="adminStatusSelect_${i}" class="bg-surface-2 border border-line-strong rounded-lg px-2 py-1.5 text-[11px] text-body focus:outline-none focus:border-amber-500">
+          <select id="adminStatusSelect_${fleetIndex}" class="bg-surface-2 border border-line-strong rounded-lg px-2 py-1.5 text-[11px] text-body focus:outline-none focus:border-amber-500">
             ${opts}
           </select>
         </td>
@@ -1815,8 +1823,9 @@ function renderAdminFleetStatus() {
       </tr>`;
   }).join('');
 
-  rows.forEach((unit, i) => {
-    const sel = document.getElementById('adminStatusSelect_' + i);
+  rows.forEach(unit => {
+    const fleetIndex = fleetList.indexOf(unit);
+    const sel = document.getElementById('adminStatusSelect_' + fleetIndex);
     if (sel) sel.value = statusKey(unit.status);
   });
 }
@@ -1986,31 +1995,37 @@ async function adminDeleteAuthUser(username) {
   await loadAdminAuthUsers();
 }
 
+function renderAdminTable(key) {
+  const tbody = document.getElementById('adminTbody_' + key);
+  if (!tbody) return;
+  const def = ADMIN_TABLES[key];
+  const rows = masterData[key] || [];
+ const q = (document.getElementById('adminSearch_' + key)?.value || '').trim().toLowerCase();
+  const matched = rows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => !q || def.fields.some(f => String(row[f.key] ?? '').toLowerCase().includes(q)));
+
+  if (matched.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${def.cols.length + 1}" class="py-4 text-center text-slate-500 text-xs font-mono">${q ? 'Tidak ada hasil' : 'Belum ada data'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = matched.map(({ row, i }) => `
+    <tr class="hover:bg-surface-3 transition">
+      ${def.fields.map(f => `<td class="py-2 px-3 text-xs whitespace-nowrap ${f.type === 'number' ? 'font-mono text-muted' : 'text-body'}">${escapeHtml(row[f.key] ?? '-')}</td>`).join('')}
+      <td class="py-2 px-3 whitespace-nowrap">
+        <button onclick="adminEditRow('${key}',${i})" class="px-2 py-0.5 rounded bg-surface-3 hover:bg-surface-2 text-[11px] font-semibold text-body mr-1">Edit</button>
+        <button onclick="adminDeleteRow('${key}',${i})" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[11px] font-semibold text-rose-700">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
 function renderAdminTables() {
   const accounts = document.getElementById('adminAccountsPanel');
   if (accounts) accounts.classList.toggle('hidden', currentUser?.role !== 'admin');
   renderAdminFleetStatus();
-  Object.keys(ADMIN_TABLES).forEach(key => {
-    const tbody = document.getElementById('adminTbody_' + key);
-    if (!tbody) return;
-    const def = ADMIN_TABLES[key];
-    const rows = masterData[key] || [];
-
-    if (rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="${def.cols.length + 1}" class="py-4 text-center text-slate-500 text-xs font-mono">Belum ada data</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = rows.map((row, i) => `
-      <tr class="hover:bg-surface-3 transition">
-        ${def.fields.map(f => `<td class="py-2 px-3 text-xs whitespace-nowrap ${f.type === 'number' ? 'font-mono text-muted' : 'text-body'}">${escapeHtml(row[f.key] ?? '-')}</td>`).join('')}
-        <td class="py-2 px-3 whitespace-nowrap">
-          <button onclick="adminEditRow('${key}',${i})" class="px-2 py-0.5 rounded bg-surface-3 hover:bg-surface-2 text-[11px] font-semibold text-body mr-1">Edit</button>
-          <button onclick="adminDeleteRow('${key}',${i})" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[11px] font-semibold text-rose-700">Hapus</button>
-        </td>
-      </tr>
-    `).join('');
-  });
+  Object.keys(ADMIN_TABLES).forEach(renderAdminTable);
 }
 
 function adminEditRow(table, index) {

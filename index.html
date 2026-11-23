@@ -301,10 +301,13 @@
           </div>
         </div>
 
-        <div class="overflow-x-auto table-scroll">
+        <div class="px-3 py-2 border-b border-line bg-surface-2/60">
+            <input id="adminSearch_personil" type="search" oninput="renderAdminTable('personil')" placeholder="Cari ID, nama, NOP..." class="w-full bg-surface-2 border border-line-strong rounded-lg px-2.5 py-1.5 text-xs text-body focus:outline-none focus:border-amber-500" />
+          </div>
+          <div class="overflow-x-auto table-scroll" style="max-height:24rem;overflow-y:auto">
           <table class="w-full text-left border-collapse min-w-[900px]">
-            <thead>
-              <tr class="border-b border-line bg-surface-2/60 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted">
+            <thead class="sticky top-0 bg-surface-2">
+                <tr class="border-b border-line text-[10px] font-semibold uppercase tracking-wider text-muted">
                 <th class="py-3 px-3.5">Order ID</th>
                 <th class="py-3 px-3.5">Nama MBP</th>
                 <th class="py-3 px-3.5">Site Destinasi</th>
@@ -351,10 +354,13 @@
           <h3 class="text-sm font-bold text-body">Override Status Armada MBP</h3>
           <p class="text-[11px] text-muted mt-0.5">Ubah status unit secara manual. Disinkronkan ke Google Sheets jika API aktif.</p>
         </div>
-        <div class="overflow-x-auto table-scroll">
+        <div class="px-3 py-2 border-b border-line bg-surface-2/60">
+          <input id="adminSearch_fleet" type="search" oninput="renderAdminFleetStatus()" placeholder="Cari unit, Order ID, status..." class="w-full bg-surface-2 border border-line-strong rounded-lg px-2.5 py-1.5 text-xs text-body focus:outline-none focus:border-amber-500" />
+        </div>
+        <div class="overflow-x-auto table-scroll" style="max-height:24rem;overflow-y:auto">
           <table class="w-full text-left border-collapse min-w-[640px]">
-            <thead>
-              <tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <thead class="sticky top-0 bg-surface-2">
+              <tr class="border-b border-line text-[10px] font-semibold uppercase tracking-wider text-muted">
                 <th class="py-2.5 px-3">Unit</th>
                 <th class="py-2.5 px-3">Order ID</th>
                 <th class="py-2.5 px-3">Status Saat Ini</th>
@@ -431,10 +437,13 @@
             <h3 class="text-sm font-bold text-body">Site List</h3>
             <button onclick="adminNewRow('sites')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
           </div>
-          <div class="overflow-x-auto table-scroll">
+          <div class="px-3 py-2 border-b border-line bg-surface-2/60">
+            <input id="adminSearch_sites" type="search" oninput="renderAdminTable('sites')" placeholder="Cari Site ID, nama, NOP..." class="w-full bg-surface-2 border border-line-strong rounded-lg px-2.5 py-1.5 text-xs text-body focus:outline-none focus:border-amber-500" />
+          </div>
+          <div class="overflow-x-auto table-scroll" style="max-height:24rem;overflow-y:auto">
             <table class="w-full text-left border-collapse min-w-[420px]">
-              <thead>
-                <tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              <thead class="sticky top-0 bg-surface-2">
+                <tr class="border-b border-line text-[10px] font-semibold uppercase tracking-wider text-muted">
                   <th class="py-2.5 px-3">Site ID</th>
                   <th class="py-2.5 px-3">Nama Site</th>
                   <th class="py-2.5 px-3">NOP</th>
@@ -453,10 +462,13 @@
             <h3 class="text-sm font-bold text-body">Unit MBP</h3>
             <button onclick="adminNewRow('units')" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold">+ Tambah</button>
           </div>
-          <div class="overflow-x-auto table-scroll">
+          <div class="px-3 py-2 border-b border-line bg-surface-2/60">
+            <input id="adminSearch_units" type="search" oninput="renderAdminTable('units')" placeholder="Cari ID, unit, NOP, WA..." class="w-full bg-surface-2 border border-line-strong rounded-lg px-2.5 py-1.5 text-xs text-body focus:outline-none focus:border-amber-500" />
+          </div>
+          <div class="overflow-x-auto table-scroll" style="max-height:24rem;overflow-y:auto">
             <table class="w-full text-left border-collapse min-w-[420px]">
-              <thead>
-                <tr class="border-b border-line bg-surface-2/60 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              <thead class="sticky top-0 bg-surface-2">
+                <tr class="border-b border-line text-[10px] font-semibold uppercase tracking-wider text-muted">
                   <th class="py-2.5 px-3">ID</th>
                   <th class="py-2.5 px-3">Nama Unit</th>
                   <th class="py-2.5 px-3">NOP</th>
@@ -501,8 +513,8 @@
     </div>
   </div>
 
-  <script defer src="js/config.js?v=a63d91744d"></script>
-  <script defer src="js/auth.js?v=eccc9bf04a"></script>
-  <script defer src="js/app.js?v=1eca83f11e"></script>
+  <script defer src="js/config.js?v=20261123"></script>
+  <script defer src="js/auth.js?v=20261123"></script>
+  <script defer src="js/app.js?v=20261123"></script>
 </body>
 </html>
