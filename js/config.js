@@ -6,7 +6,8 @@
 // URL Web App Google Apps Script (berakhiran /exec).
 // Kosongkan = aplikasi terkunci (belum bisa login).
 // js/config.js
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbw7HhB7Pn5-30mTzOqA4RYVAxkN6mDpQnO69Rt8rfYwWoLvcyQlWIjyApAylC1viTy7/exec';
+const SUPABASE_URL = 'https://mkbqrwjwgsjjlbjmaobw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rYnFyd2p3Z3Nqamxiam1hb2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MDAxODYsImV4cCI6MjExMDk3NjE4Nn0.FA-Vhm1FwzPEkVVapARvS8sIhBkaI6TDg4mCEu5Xn5U';
 
 // Kunci localStorage
 const STORAGE_KEY_FLEET = 'mbp_fleet_state_v2';

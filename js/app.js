@@ -1,5 +1,5 @@
 // Konstanta & kunci localStorage hidup di js/config.js (const lintas <script> tidak boleh diulang)
-let gasWebAppUrl = localStorage.getItem(STORAGE_KEY_URL) || DEFAULT_GAS_URL;
+let gasWebAppUrl = SUPABASE_URL;
 let activeRole = 'omc';
 let selectedMobileMbp = '';
 
@@ -106,7 +106,9 @@ function loadMasterData() {
       return saved;
     }
   } catch (err) { /* data rusak -> pakai seed */ }
-  return JSON.parse(JSON.stringify(MASTER_SEED));
+  return gasWebAppUrl
+    ? { personil: [], sites: [], units: [] }
+    : JSON.parse(JSON.stringify(MASTER_SEED));
 }
 
 function saveMasterData() {
@@ -143,7 +145,7 @@ function getUnitNop(unit) {
 function getSiteCoords(siteName) {
   const siteId = (siteName || '').split(' ')[0];
   return masterData.sites.find(s => s.siteId === siteId || s.nama === siteName)
-    || SITE_LOCATIONS.find(s => s.name === siteName)
+    || (gasWebAppUrl ? null : SITE_LOCATIONS.find(s => s.name === siteName))
     || null;
 }
 
@@ -224,7 +226,10 @@ function refreshDispatchOrderIdWarning() {
 function getSeedFleet() {
   const now = Date.now();
   const start = new Date(now - 30 * 60000).toISOString();
-  return (masterData.units?.length ? masterData.units : MASTER_SEED.units).map(unit => ({
+  const units = masterData.units?.length
+    ? masterData.units
+    : (gasWebAppUrl ? [] : MASTER_SEED.units);
+  return units.map(unit => ({
     id: unit.id,
     namaMbp: unit.nama,
     noWa: unit.noWa || '',
@@ -438,7 +443,7 @@ function updateConnectionBadge(connected = false, label = '') {
     badge.textContent = label;
     badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 border border-rose-500/30 whitespace-nowrap';
   } else if (connected) {
-    badge.textContent = 'Sheets Terhubung';
+    badge.textContent = 'Data Terhubung';
     badge.className = 'text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 whitespace-nowrap';
   } else if (!gasWebAppUrl) {
     badge.textContent = 'URL backend belum diatur';
@@ -472,15 +477,9 @@ function handleMbpDispatchChange({ force = false } = {}) {
 window.handleMbpDispatchChange = handleMbpDispatchChange;
 
 function populateSelectDropdowns() {
-  const omcSelect = document.getElementById('dispatchMbpSelect');
-  const scopedFleet = fleetInScope();
-  const currentOmc = omcSelect?.value || scopedFleet[0]?.namaMbp;
-
-  if (omcSelect) {
-    omcSelect.innerHTML = scopedFleet.map(m =>
-      `<option value="${escapeHtml(m.namaMbp)}">${escapeHtml(m.namaMbp)} — [${escapeHtml(STATUS_LABEL[statusKey(m.status)])}]</option>`
-    ).join('');
-    omcSelect.value = scopedFleet.some(m => m.namaMbp === currentOmc) ? currentOmc : (scopedFleet[0]?.namaMbp || '');
+  const mbpInput = document.getElementById('dispatchMbpSelect');
+  if (mbpInput && document.activeElement !== mbpInput) {
+    refreshMbpDatalist(mbpInput.value);
   }
 
   const siteInput = document.getElementById('dispatchSiteSelect');
@@ -511,10 +510,7 @@ function buildMagicLinkUrl(orderId, namaMbp, site, token) {
     mbp: namaMbp,
     site: site
   };
-  // Otomatis sertakan URL Google Apps Script agar HP teknisi baru langsung terhubung!
-  if (gasWebAppUrl) {
-    paramsObj.gas = gasWebAppUrl;
-  }
+  
   const p = new URLSearchParams(paramsObj);
   return `${base}?${p.toString()}`;
 }
@@ -707,7 +703,7 @@ async function dispatchTicket(event) {
       return;
     }
   } else {
-    resetPendingDispatch(unit);
+    clearPendingDispatch(unit);
     event.preventDefault();
     showSyncError('Backend tidak tersedia. Link MBP tidak dikirim karena token belum tersimpan.');
     return;
@@ -1015,10 +1011,10 @@ async function applyApproval(unit, to) {
 }
 
 async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
-  const siteObj = getSiteCoords(unit.activeSite) || SITE_LOCATIONS[0];
-  const distKm = calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng);
-  const etaSec = calculateCarEtaSeconds(distKm);
-  const etaStr = `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)`;
+  const siteObj = getSiteCoords(unit.activeSite) || (gasWebAppUrl ? null : SITE_LOCATIONS[0]);
+  const distKm = siteObj ? calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng) : 0;
+  const etaSec = siteObj ? calculateCarEtaSeconds(distKm) : 0;
+  const etaStr = siteObj ? `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)` : '-';
 
   const order = orderList.find(o => o.orderId === unit.activeOrderId);
   if (order) {
@@ -1274,10 +1270,8 @@ function tickTimers() {
 }
 
 function applySheetRecords(sheetRecords) {
-  const serverIds = new Set(sheetRecords.map(r => r.orderId));
-  const localOnly = orderList.filter(o => !serverIds.has(o.orderId));
   sheetRecords.forEach(r => { r.status = statusKey(r.status); });
-  orderList = sheetRecords.slice().reverse().concat(localOnly);
+  orderList = sheetRecords.slice().reverse();
   localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orderList));
 
   const byMbp = new Map();
@@ -1358,6 +1352,23 @@ function refreshSiteDatalist(query = '') {
   }).join('');
 }
 
+function refreshMbpDatalist(query = '') {
+  const mbpList = document.getElementById('dispatchMbpList');
+  if (!mbpList) return;
+  const q = query.trim().toLowerCase();
+  const fleet = fleetInScope();
+  const matched = (q
+    ? fleet.filter(m => (m.namaMbp + ' ' + (m.id || '')).toLowerCase().includes(q))
+    : fleet
+  ).slice(0, 30);
+
+  mbpList.innerHTML = matched.map(m => {
+    const label = `${m.namaMbp} — [${STATUS_LABEL[statusKey(m.status)]}]`;
+    return `<option value="${escapeHtml(m.namaMbp)}" label="${escapeHtml(label)}"></option>`;
+  }).join('');
+}
+window.refreshMbpDatalist = refreshMbpDatalist;
+
 function applyMasterResponse(json) {
   if (!json?.masterData || !Array.isArray(json.masterData.personil) || !Array.isArray(json.masterData.sites) || !Array.isArray(json.masterData.units)) return;
   masterData = json.masterData;
@@ -1431,41 +1442,164 @@ function getApiSessionToken() {
     : getGasSessionToken();
 }
 
+const sbTs = v => (v && v !== '-' ? v : null);
+
+const sbToOrder = r => ({
+  orderId: r.order_id, namaMbp: r.nama_mbp || '', noWa: r.no_wa || '',
+  siteDestinasi: r.site_destinasi || '', linkMapsSite: r.link_maps_site || '',
+  prioritas: r.prioritas || '-', status: r.status || 'Idle',
+  durasiIdleSebelumOrder: r.durasi_idle_sebelum_order || '-',
+  estimasiEta: r.estimasi_eta || '-', selisihOtwEta: r.selisih_otw_eta || '-',
+  tsIdle: r.ts_idle || '', tsAccept: r.ts_accept || '', tsOtw: r.ts_otw || '',
+  tsOnsite: r.ts_onsite || '', tsSelesai: r.ts_selesai || '',
+  totalDurasi: r.total_durasi || '', nop: r.nop || '',
+  dispatchToken: r.dispatch_token || ''
+});
+
+function sbToMaster(rows) {
+  const out = { personil: [], sites: [], units: [] };
+  for (const r of rows || []) {
+    if (r.kategori === 'personil') out.personil.push({ id: r.id, nama: r.nama || '', nop: r.nop || '' });
+    else if (r.kategori === 'sites') out.sites.push({ siteId: r.id, nama: r.nama || '', nop: r.nop || '', lat: r.latitude, lng: r.longitude });
+    else if (r.kategori === 'units') out.units.push({ id: r.id, nama: r.nama || '', nop: r.nop || '', noWa: r.no_wa || '' });
+  }
+  return out;
+}
+
+async function sbReq(path, { method = 'GET', body, token, prefer, signal } = {}) {
+  const headers = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (prefer) headers.Prefer = prefer;
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    method, headers, body: body !== undefined ? JSON.stringify(body) : undefined, signal
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(data?.error_description || data?.message || data?.msg || `HTTP ${res.status}`);
+  return data;
+}
+
 async function gasPost(payload, { auth = true } = {}) {
-  if (!gasWebAppUrl) return { status: 'error', message: 'URL Apps Script belum diatur.' };
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { status: 'error', message: 'Konfigurasi Supabase belum diisi.' };
   const body = { ...payload };
   if (body.action === 'updateStatus' && !body.nop) body.nop = siteNopOf(body.siteDestinasi);
-  if (auth) {
-    body.sessionToken = getApiSessionToken();
-    if (!body.sessionToken) return { status: 'error', message: 'Sesi habis. Login ulang.' };
-  }
+  const token = auth ? getApiSessionToken() : (body.sessionToken || '');
+  if (auth && !token) return { status: 'error', message: 'Sesi habis. Login ulang.' };
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+  const sig = controller.signal;
+  const isMbp = currentUser?.role === 'mbp' || mbpRuntimeState?.role === 'mbp';
+
   try {
-    const res = await fetch(gasWebAppUrl, {
-      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body), redirect: 'follow', signal: controller.signal
-    });
-    const json = await res.json();
-    if (json.status === 'success' && !Array.isArray(json.data)) applyMasterResponse({ masterData: json.masterData });
-    if (json.status === 'success') {
-      // 'read' handled by syncFromServer (applyServerPayload + saveAndBroadcast).
-      if (Array.isArray(json.data) && body.action !== 'read') applyServerPayload(json);
+    let json;
+
+    if (body.action === 'login') {
+      const email = `${String(body.username || '').trim().toLowerCase()}@mbp.local`;
+      const d = await sbReq('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password: body.password }, signal: sig });
+      const meta = d.user?.app_metadata || {};
+      const username = (d.user?.email || email).replace(/@mbp\.local$/i, '');
+      json = { status: 'success', sessionToken: d.access_token, user: { username, name: meta.name || username, role: meta.role || 'omc', nop: meta.nop || '', unit: meta.unit || '' } };
+    } else if (body.action === 'validateSession') {
+      const d = await sbReq('/auth/v1/user', { token, signal: sig });
+      const meta = d.app_metadata || {};
+      const username = (d.email || '').replace(/@mbp\.local$/i, '');
+      json = { status: 'success', user: { username, name: meta.name || username, role: meta.role || 'omc', nop: meta.nop || '', unit: meta.unit || '' } };
+    } else if (body.action === 'validateMagicLink') {
+      const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_token: body.token }, signal: sig });
+      const row = rows?.[0];
+      if (!row || row.order_id !== body.orderId) return { status: 'error', message: 'Link tugas tidak valid atau sudah tidak berlaku.' };
+      if (statusKey(row.status) === 'selesai') return { status: 'error', message: `Tiket ${row.order_id} sudah selesai.` };
+      const unitName = row.nama_mbp || body.namaMbp;
+      json = { status: 'success', sessionToken: body.token, user: { username: 'mbp', name: unitName, role: 'mbp', unit: unitName, namaMbp: unitName, orderId: row.order_id, dispatchToken: body.token } };
+    } else if (body.action === 'logout') {
+      if (token && token.includes('.')) await sbReq('/auth/v1/logout', { method: 'POST', token, signal: sig }).catch(() => {});
+      return { status: 'success' };
+    } else if (body.action === 'read') {
+      if (isMbp) {
+        const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_token: token }, signal: sig });
+        json = { status: 'success', backendVersion: EXPECTED_BACKEND_VERSION, data: (rows || []).map(sbToOrder) };
+      } else {
+        const [tickets, coreMaster, siteMaster] = await Promise.all([
+          sbReq('/rest/v1/tickets?select=*&order=ts_accept.asc.nullsfirst', { token, signal: sig }),
+          sbReq('/rest/v1/master_data?select=*&kategori=in.(personil,units)', { token, signal: sig }),
+          sbReq('/rest/v1/master_data?select=*&kategori=eq.sites', { token, signal: sig })
+        ]);
+        json = {
+          status: 'success',
+          backendVersion: EXPECTED_BACKEND_VERSION,
+          data: (tickets || []).map(sbToOrder),
+          masterData: sbToMaster([...(coreMaster || []), ...(siteMaster || [])])
+        };
+      }
+    } else if (body.action === 'updateStatus') {
+      if (isMbp) {
+        const rows = await sbReq('/rest/v1/rpc/update_ticket_by_token', {
+          method: 'POST', signal: sig,
+          body: {
+            p_token: body.dispatchToken || token,
+            p_status: body.newStatus,
+            p_durasi_idle_sebelum_order: body.durasiIdleSebelumOrder || null,
+            p_estimasi_eta: body.estimasiEta || null,
+            p_selisih_otw_eta: body.selisihOtwEta || null,
+            p_ts_accept: sbTs(body.tsAccept),
+            p_ts_otw: sbTs(body.tsOtw),
+            p_ts_onsite: sbTs(body.tsOnsite),
+            p_ts_selesai: sbTs(body.tsSelesai),
+            p_total_durasi: body.totalDurasi || null
+          }
+        });
+        json = { status: 'success', backendVersion: EXPECTED_BACKEND_VERSION, data: (rows || []).map(sbToOrder) };
+      } else {
+        const row = {
+          order_id: body.orderId, nama_mbp: body.namaMbp || '', no_wa: body.noWa || '',
+          site_destinasi: body.siteDestinasi || '', link_maps_site: body.linkMapsSite || '',
+          prioritas: body.prioritas || '-', status: body.newStatus,
+          durasi_idle_sebelum_order: body.durasiIdleSebelumOrder || '-',
+          estimasi_eta: body.estimasiEta || '-', selisih_otw_eta: body.selisihOtwEta || '-',
+          ts_idle: sbTs(body.tsIdle), ts_accept: sbTs(body.tsAccept), ts_otw: sbTs(body.tsOtw),
+          ts_onsite: sbTs(body.tsOnsite), ts_selesai: sbTs(body.tsSelesai),
+          total_durasi: body.totalDurasi || '', nop: body.nop || '',
+          dispatch_token: body.dispatchToken || null
+        };
+        await sbReq('/rest/v1/tickets?on_conflict=order_id', {
+          method: 'POST', token, body: row, prefer: 'resolution=merge-duplicates,return=minimal', signal: sig
+        });
+        json = { status: 'success' };
+      }
+    } else if (body.action === 'saveMaster') {
+      const m = body.masterData || {};
+      const rows = [
+        ...(m.personil || []).map(p => ({ kategori: 'personil', id: p.id, nama: p.nama || '', nop: p.nop || '', no_wa: null, latitude: null, longitude: null })),
+        ...(m.sites || []).map(s => ({ kategori: 'sites', id: s.siteId, nama: s.nama || '', nop: s.nop || '', no_wa: null, latitude: s.lat === '' || s.lat == null ? null : Number(s.lat), longitude: s.lng === '' || s.lng == null ? null : Number(s.lng) })),
+        ...(m.units || []).map(u => ({ kategori: 'units', id: u.id, nama: u.nama || '', nop: u.nop || '', no_wa: u.noWa || '', latitude: null, longitude: null }))
+      ];
+      await sbReq('/rest/v1/master_data?kategori=in.(personil,sites,units)', { method: 'DELETE', token, signal: sig });
+      if (rows.length) await sbReq('/rest/v1/master_data', { method: 'POST', token, body: rows, prefer: 'return=minimal', signal: sig });
+      json = { status: 'success', masterData: m };
+    } else if (['listUsers', 'setPassword', 'deleteUser'].includes(body.action)) {
+      json = await sbReq('/functions/v1/swift-api', {
+        method: 'POST', token, body, signal: sig
+      });
     } else {
-      if (/sesi tidak valid|kedaluwarsa/i.test(json.message || '')) logout();
-      notifySyncError(json.message || 'Server menolak permintaan');
+      return { status: 'error', message: 'Aksi tidak dikenal: ' + body.action };
     }
+
+    if (json.status === 'success' && Array.isArray(json.data) && body.action !== 'read') applyServerPayload(json);
     return json;
   } catch (err) {
     const message = err.name === 'AbortError'
       ? 'Server tidak merespons dalam ' + Math.round(SYNC_TIMEOUT_MS / 1000) + ' detik.'
       : (err.message || String(err));
+    if (/jwt|expired|invalid.*token|401/i.test(message)) logout();
     notifySyncError(message);
     return { status: 'error', message };
   } finally {
     clearTimeout(timer);
   }
 }
+window.gasPost = gasPost;
+
 window.gasPost = gasPost;
 
 async function syncFromServer(showSpinner = false) {
@@ -1663,15 +1797,44 @@ async function adminApplyFleetStatus(fleetIndex) {
 
 async function loadAdminAuthUsers() {
   if (currentUser?.role !== 'admin') return;
-  const response = await gasPost({ action: 'listUsers' });
-  if (response.status !== 'success') return;
   const notice = document.getElementById('adminAuthNotice');
-  if (notice) { notice.textContent = ''; notice.classList.add('hidden'); }
+  const response = await gasPost({ action: 'listUsers' });
+  if (response.status !== 'success') {
+    if (notice) {
+      notice.textContent = 'Gagal memuat daftar akun: ' + (response.message || 'Edge Function error');
+      notice.classList.remove('hidden');
+    }
+    return;
+  }
+  if (notice) {
+    notice.textContent = '';
+    notice.classList.add('hidden');
+  }
   const tbody = document.getElementById('adminAuthUsersBody');
   if (!tbody) return;
   const users = response.users || [];
   tbody.innerHTML = users.map(user => `
-    <tr><td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td><td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td><td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td><td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td><td class="py-2 px-3"><button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs">Atur password</button></td></tr>
+    <tr>
+    <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td>
+    <td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td>
+    <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td>
+    <td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td>
+    <td class="py-2 px-3"><button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs">Atur password</button></td>
+  </tr>
+  `).join('');
+  tbody.innerHTML = users.map(user => `
+    <tr>
+      <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td>
+      <td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td>
+      <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td>
+      <td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td>
+      <td class="py-2 px-3 whitespace-nowrap">
+        <button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs mr-1">Atur password</button>
+        ${user.username !== currentUser?.username
+          ? `<button type="button" onclick="adminDeleteAuthUser('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-rose-500/20 text-rose-700 text-xs">Hapus</button>`
+          : ''}
+      </td>
+    </tr>
   `).join('');
   const known = new Set(users.map(user => user.username));
   const select = document.getElementById('adminAuthPersonSelect');
@@ -1682,8 +1845,9 @@ async function loadAdminAuthUsers() {
   }
 }
 
-async function adminSetAuthPassword(username, createIfMissing = false) {
-  const password = document.getElementById('adminAuthNewPassword')?.value || '';
+async function adminSetAuthPassword(username, createIfMissing = false, forcedPassword = null) {
+  const inputEl = document.getElementById('adminAuthNewPassword');
+  const password = forcedPassword !== null ? forcedPassword : (inputEl?.value || '');
   if (password.length < 8) {
     alert('Password minimal 8 karakter.');
     return;
@@ -1693,11 +1857,16 @@ async function adminSetAuthPassword(username, createIfMissing = false) {
     action: 'setPassword', targetUsername: username, newPassword: password, createIfMissing,
     role: 'omc', name: person?.nama || username, nop: person?.nop || ''
   });
-  if (response.status !== 'success') return;
+  if (response.status !== 'success') {
+    alert('Gagal ubah password: ' + (response.message || 'Error server'));
+    return;
+  }
   const output = document.getElementById('adminAuthPasswordNotice');
-  output.textContent = `Password baru tersimpan untuk ${response.username}. Berikan password baru yang tadi kamu masukkan kepada pemilik akun.`;
-  output.classList.remove('hidden');
-  document.getElementById('adminAuthNewPassword').value = '';
+  if (output) {
+    output.textContent = `Password baru tersimpan untuk ${response.username}. Berikan password baru tersebut kepada pemilik akun.`;
+    output.classList.remove('hidden');
+  }
+  if (inputEl) inputEl.value = '';
   await loadAdminAuthUsers();
 }
 
@@ -1708,8 +1877,25 @@ function adminSetSelectedAuthPassword() {
 }
 
 function adminResetAuthPassword(username) {
-  document.getElementById('adminAuthPersonSelect').value = username;
-  return adminSetAuthPassword(username, false);
+  const inputEl = document.getElementById('adminAuthNewPassword');
+  const pw = inputEl?.value || '';
+  if (pw.length < 8) {
+    const notice = document.getElementById('adminAuthNotice');
+    if (notice) {
+      notice.textContent = `Ketik password baru (min. 8 karakter) di kolom "Password baru" terlebih dahulu, lalu klik "Atur password" untuk ${username}.`;
+      notice.classList.remove('hidden');
+    }
+    inputEl?.focus();
+    return Promise.resolve();
+  }
+  return adminSetAuthPassword(username, false, pw);
+}
+
+async function adminDeleteAuthUser(username) {
+  if (!confirm(`Hapus akun "${username}"?`)) return;
+  const response = await gasPost({ action: 'deleteUser', targetUsername: username });
+  if (response.status !== 'success') return;
+  await loadAdminAuthUsers();
 }
 
 function renderAdminTables() {
@@ -1860,7 +2046,7 @@ function syncFleetFromMaster() {
   });
   // 2. Hapus unit dari fleetList jika sudah dihapus oleh Admin (kecuali sedang memegang order aktif)
   const validNames = new Set(masterData.units.map(u => u.nama));
-  fleetList = fleetList.filter(f => validNames.has(f.namaMbp) || statusKey(f.status) !== 'idle');
+  fleetList = fleetList.filter(f => validNames.has(f.namaMbp));
   masterData.units.forEach(unit => {
     if (!fleetList.some(fleet => fleet.id === unit.id || fleet.namaMbp === unit.nama)) {
       fleetList.push({

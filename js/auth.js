@@ -1,21 +1,7 @@
 const INITIAL_URL_PARAMS = new URLSearchParams(window.location.search);
 const HAS_MAGIC_LINK = !!(INITIAL_URL_PARAMS.get('tkn') && INITIAL_URL_PARAMS.get('oid') && INITIAL_URL_PARAMS.get('mbp'));
-const incomingGasUrl = INITIAL_URL_PARAMS.get('gas');
-if (incomingGasUrl) {
-  try {
-    const parsedGasUrl = new URL(incomingGasUrl);
-    if (parsedGasUrl.origin === 'https://script.google.com' && parsedGasUrl.pathname.endsWith('/exec')) {
-      localStorage.setItem(STORAGE_KEY_URL, incomingGasUrl);
-      if (typeof gasWebAppUrl !== 'undefined') gasWebAppUrl = incomingGasUrl;
-    }
-  } catch (err) {
-    console.warn('URL Apps Script pada link tidak valid.');
-  }
-}
 
 let currentUser = null;
-// State runtime MBP dideklarasikan di sini (auth.js dimuat sebelum app.js) agar
-// readSession() tidak menyentuh binding yang belum terinisialisasi.
 let mbpRuntimeState = null;
 
 function sessionPayload(user) {
@@ -62,7 +48,6 @@ function readSession() {
 
 function clearAuthSession({ all = false } = {}) {
   const persisted = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
-  // Sesi admin/OMC di localStorage tidak boleh dihapus oleh tab MBP.
   if (all || !persisted || persisted.role === 'mbp') localStorage.removeItem(AUTH_SESSION_KEY);
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   if (currentUser?.role === 'mbp' || mbpRuntimeState?.role === 'mbp') mbpRuntimeState = null;
@@ -81,10 +66,16 @@ function applyUser(user) {
     const sessionFleet = JSON.parse(sessionStorage.getItem(STORAGE_KEY_FLEET) || '[]');
     const matched = sessionFleet.find(item => item.namaMbp === unitName || item.id === unitName)
       || fleetList.find(item => item.namaMbp === unitName || item.id === unitName)
-      || getSeedFleet().find(item => item.namaMbp === unitName || item.id === unitName);
-    fleetList = matched ? [matched] : [];
+      || getSeedFleet().find(item => item.namaMbp === unitName || item.id === unitName)
+      || {
+        id: unitName, namaMbp: unitName, noWa: '', nop: '', status: 'belum_otw',
+        activeOrderId: user.orderId || '-', activeSite: '-', activePriority: '-',
+        tsIdleStart: new Date().toISOString(), tsCurrentStatusStart: new Date().toISOString(),
+        pendingOrder: null, estimasiEta: '-', selisihOtwEta: '-'
+      };
+    fleetList = [matched];
     orderList = JSON.parse(sessionStorage.getItem(STORAGE_KEY_ORDERS) || '[]');
-    selectedMobileMbp = matched?.namaMbp || unitName;
+    selectedMobileMbp = matched.namaMbp;
     mbpRuntimeState = { role: 'mbp', unit: unitName, orderId: user.orderId, dispatchToken: user.dispatchToken || '', sessionToken: user.sessionToken };
     localStorage.removeItem(STORAGE_KEY_FLEET);
     localStorage.removeItem(STORAGE_KEY_ORDERS);
@@ -165,28 +156,8 @@ async function tryMagicLinkAuth() {
   const user = { ...result.user, sessionToken: result.sessionToken, dispatchToken: token };
   saveSession(user);
   applyUser(user);
-  let unit = fleetList.find(item => item.namaMbp === user.unit || item.id === user.unit);
-  if (!unit) {
-    const resultRead = await gasPost({ action: 'read', sessionToken: result.sessionToken }, { auth: false });
-    if (resultRead.status === 'success') {
-      masterData = resultRead.masterData || masterData;
-      localStorage.setItem(STORAGE_KEY_MASTER, JSON.stringify(masterData));
-      syncFleetFromMaster();
-      applyServerPayload(resultRead);
-      unit = fleetList.find(item => item.namaMbp === user.unit || item.id === user.unit);
-    }
-  }
-  if (!unit) {
-    await gasPost({ action: 'logout', sessionToken: result.sessionToken }, { auth: false });
-    clearAuthSession();
-    currentUser = null;
-    mbpRuntimeState = null;
-    document.getElementById('loginScreen')?.classList.remove('hidden');
-    document.getElementById('loginScreen')?.classList.add('flex');
-    showLoginError('Unit MBP pada link tidak ditemukan. Hubungi OMC.');
-    return true;
-  }
-  if (['idle', 'belum_otw'].includes(statusKey(unit.status))) {
+  const unit = fleetList.find(item => item.namaMbp === user.unit || item.id === user.unit);
+  if (unit && ['idle', 'belum_otw'].includes(statusKey(unit.status))) {
     const dispatchedAt = new Date().toISOString();
     unit.pendingOrder = { orderId, token, siteDestinasi: site, linkMapsSite: getSiteMapsUrl(site), prioritas: '-', nop: siteNopOf(site), dispatchedAt };
     unit.status = 'belum_otw';
@@ -239,7 +210,9 @@ async function logout() {
     localStorage.removeItem(STORAGE_KEY_FLEET);
     localStorage.removeItem(STORAGE_KEY_ORDERS);
     localStorage.removeItem(STORAGE_KEY_MASTER);
-    masterData = JSON.parse(JSON.stringify(MASTER_SEED));
+    masterData = gasWebAppUrl
+      ? { personil: [], sites: [], units: [] }
+      : JSON.parse(JSON.stringify(MASTER_SEED));
     selectedMobileMbp = '';
   }
   const loginScreen = document.getElementById('loginScreen');

@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 *.log
 .claude/
+
+# Artefak laporan / kerja non-website (jangan ikut repo)
+Laporan/
+dokumen-laporan/
+.review_work/

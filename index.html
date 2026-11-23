@@ -206,8 +206,18 @@
 
             <div>
               <label class="block text-xs font-medium text-body mb-1">Pilih Tim MBP</label>
-              <select id="dispatchMbpSelect" onchange="handleMbpDispatchChange()" required class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500">
-              </select>
+              <input
+                id="dispatchMbpSelect"
+                list="dispatchMbpList"
+                type="text"
+                autocomplete="off"
+                required
+                placeholder="Cari / pilih Tim MBP..."
+                oninput="refreshMbpDatalist(this.value); handleMbpDispatchChange()"
+                onchange="handleMbpDispatchChange()"
+                class="w-full bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-body focus:outline-none focus:border-amber-500"
+              />
+              <datalist id="dispatchMbpList"></datalist>
             </div>
 
             <div>
@@ -486,8 +496,8 @@
     </div>
   </div>
 
-  <script defer src="js/config.js?v=d749b8fe64"></script>
-  <script defer src="js/auth.js?v=e8b6d3aaff"></script>
-  <script defer src="js/app.js?v=4439512e02"></script>
+  <script defer src="js/config.js?v=a63d91744d"></script>
+  <script defer src="js/auth.js?v=eccc9bf04a"></script>
+  <script defer src="js/app.js?v=1eca83f11e"></script>
 </body>
 </html>
