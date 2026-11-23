@@ -493,7 +493,7 @@ function populateSelectDropdowns() {
 let currentDispatchToken = '';
 
 function generateDispatchToken() {
-  const arr = new Uint8Array(6);
+  const arr = new Uint8Array(16);
   crypto.getRandomValues(arr);
   currentDispatchToken = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
   return currentDispatchToken;
@@ -1180,7 +1180,7 @@ function approvalCellHtml(item) {
   const to = OMC_APPROVALS[item.status];
   if (!to) return '<span class="text-faint text-[11px] font-mono">-</span>';
   const label = to === 'onsite' ? 'Approve Onsite' : 'Approve Selesai';
-  return `<button onclick="approveOrder('${escapeHtml(item.orderId)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition">${label}</button>`;
+  return `<button data-order-id="${escapeHtml(item.orderId)}" onclick="approveOrder(this.dataset.orderId)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition">${label}</button>`;
 }
 
 function fleetApprovalCellHtml(unit) {
@@ -1506,7 +1506,7 @@ async function gasPost(payload, { auth = true } = {}) {
       const username = (d.email || '').replace(/@mbp\.local$/i, '');
       json = { status: 'success', user: { username, name: meta.name || username, role: meta.role || 'omc', nop: meta.nop || '', unit: meta.unit || '' } };
     } else if (body.action === 'validateMagicLink') {
-      const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_token: body.token }, signal: sig });
+      const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_order_id: body.orderId, p_token: body.token }, signal: sig });
       const row = rows?.[0];
       if (!row || row.order_id !== body.orderId) return { status: 'error', message: 'Link tugas tidak valid atau sudah tidak berlaku.' };
       if (statusKey(row.status) === 'selesai') return { status: 'error', message: `Tiket ${row.order_id} sudah selesai.` };
@@ -1517,7 +1517,7 @@ async function gasPost(payload, { auth = true } = {}) {
       return { status: 'success' };
     } else if (body.action === 'read') {
       if (isMbp) {
-        const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_token: token }, signal: sig });
+        const rows = await sbReq('/rest/v1/rpc/get_ticket_by_token', { method: 'POST', body: { p_order_id: currentUser?.orderId || mbpRuntimeState?.orderId || '', p_token: token }, signal: sig });
         json = { status: 'success', backendVersion: EXPECTED_BACKEND_VERSION, data: (rows || []).map(sbToOrder) };
       } else {
         const [tickets, coreMaster, siteMaster] = await Promise.all([
@@ -1537,6 +1537,7 @@ async function gasPost(payload, { auth = true } = {}) {
         const rows = await sbReq('/rest/v1/rpc/update_ticket_by_token', {
           method: 'POST', signal: sig,
           body: {
+            p_order_id: body.orderId,
             p_token: body.dispatchToken || token,
             p_status: body.newStatus,
             p_durasi_idle_sebelum_order: body.durasiIdleSebelumOrder || null,
@@ -1560,7 +1561,7 @@ async function gasPost(payload, { auth = true } = {}) {
           ts_idle: sbTs(body.tsIdle), ts_accept: sbTs(body.tsAccept), ts_otw: sbTs(body.tsOtw),
           ts_onsite: sbTs(body.tsOnsite), ts_selesai: sbTs(body.tsSelesai),
           total_durasi: body.totalDurasi || '', nop: body.nop || '',
-          dispatch_token: body.dispatchToken || null
+          dispatch_token: statusKey(body.newStatus) === 'selesai' ? null : (body.dispatchToken || null)
         };
         await sbReq('/rest/v1/tickets?on_conflict=order_id', {
           method: 'POST', token, body: row, prefer: 'resolution=merge-duplicates,return=minimal', signal: sig
@@ -1815,23 +1816,14 @@ async function loadAdminAuthUsers() {
   const users = response.users || [];
   tbody.innerHTML = users.map(user => `
     <tr>
-    <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td>
-    <td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td>
-    <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td>
-    <td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td>
-    <td class="py-2 px-3"><button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs">Atur password</button></td>
-  </tr>
-  `).join('');
-  tbody.innerHTML = users.map(user => `
-    <tr>
       <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.username)}</td>
       <td class="py-2 px-3 text-xs">${escapeHtml(user.name)}</td>
       <td class="py-2 px-3 font-mono text-xs">${escapeHtml(user.nop || '-')}</td>
       <td class="py-2 px-3 text-xs">${escapeHtml(user.role)}</td>
       <td class="py-2 px-3 whitespace-nowrap">
-        <button type="button" onclick="adminResetAuthPassword('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-surface-3 text-xs mr-1">Atur password</button>
+      <button type="button" data-username="${escapeHtml(user.username)}" onclick="adminResetAuthPassword(this.dataset.username)" class="px-2 py-1 rounded bg-surface-3 text-xs mr-1">Atur password</button>
         ${user.username !== currentUser?.username
-          ? `<button type="button" onclick="adminDeleteAuthUser('${escapeHtml(user.username)}')" class="px-2 py-1 rounded bg-rose-500/20 text-rose-700 text-xs">Hapus</button>`
+          ? `<button type="button" data-username="${escapeHtml(user.username)}" onclick="adminDeleteAuthUser(this.dataset.username)" class="px-2 py-1 rounded bg-rose-500/20 text-rose-700 text-xs">Hapus</button>`
           : ''}
       </td>
     </tr>
