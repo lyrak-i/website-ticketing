@@ -291,9 +291,14 @@
             </h2>
             <p class="text-[11px] text-muted">Setiap order id unik tersimpan pada baris baru lengkap dengan rekaman durasi idle sebelumnya</p>
           </div>
-          <span class="text-xs font-mono text-amber-700 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
-            Total Tiket: <strong id="totalOrdersCount">0</strong>
-          </span>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="exportOrdersCsv()" class="px-2.5 py-1 rounded-lg bg-surface-3 hover:bg-surface-2 text-xs font-semibold text-body border border-line-strong transition">
+              Export CSV
+            </button>
+            <span class="text-xs font-mono text-amber-700 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
+              Total Tiket: <strong id="totalOrdersCount">0</strong>
+            </span>
+          </div>
         </div>
 
         <div class="overflow-x-auto table-scroll">

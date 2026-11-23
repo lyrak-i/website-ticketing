@@ -105,6 +105,7 @@ function applyUser(user) {
   }, { once: true });
   if (!isMbp && typeof switchRole === 'function') switchRole(isAdmin ? 'admin' : 'omc');
   if (typeof refreshNopFilterUi === 'function') refreshNopFilterUi();
+  if (typeof connectRealtime === 'function') connectRealtime();
 }
 
 function showLoginError(message) {
@@ -190,6 +191,7 @@ async function checkMbpSessionExpiry() {
 }
 
 async function logout() {
+  if (typeof disconnectRealtime === 'function') disconnectRealtime();
   const session = readSession();
   const wasMbp = currentUser?.role === 'mbp' || mbpRuntimeState?.role === 'mbp';
   if (session?.sessionToken && typeof gasPost === 'function') {

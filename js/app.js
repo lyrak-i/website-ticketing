@@ -415,12 +415,13 @@ function initApp() {
     renderAll();
   }
 
-  async function runSync() {
-    if (gasWebAppUrl && readSession()) await syncFromServer(false);
+  if (gasWebAppUrl && readSession()) {
+    syncFromServer(false);
+    connectRealtime();
   }
-  runSync();
-  setInterval(runSync, SYNC_INTERVAL_MS);
-  if (typeof checkMbpSessionExpiry === 'function') setInterval(checkMbpSessionExpiry, 5000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && gasWebAppUrl && readSession()) syncFromServer(false);
+  });
 }
 
 window.addEventListener('storage', (e) => {
@@ -1191,6 +1192,40 @@ function fleetApprovalCellHtml(unit) {
   return approvalCellHtml(item);
 }
 
+function exportOrdersCsv() {
+  const nf = getEffectiveNopFilter();
+  const rows = nf
+    ? orderList.filter(o => getOrderNop(o).toUpperCase() === nf.toUpperCase())
+    : orderList;
+  if (!rows.length) {
+    alert('Belum ada data tiket untuk diekspor.');
+    return;
+  }
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const headers = [
+    'Order ID', 'Nama MBP', 'Site Destinasi', 'NOP', 'Prioritas',
+    'Idle Sblm Order', 'Estimasi ETA', 'Selisih OTW vs ETA', 'Status Tiket',
+    'Log Total Durasi', 'TS Accept', 'TS OTW', 'TS Onsite', 'TS Selesai'
+  ];
+  const lines = [
+    headers.map(esc).join(','),
+    ...rows.map(o => [
+      o.orderId, o.namaMbp, o.siteDestinasi, getOrderNop(o), o.prioritas,
+      o.durasiIdleSebelumOrder || '-', o.estimasiEta || '-', o.selisihOtwEta || '-',
+      STATUS_LABEL[statusKey(o.status)] || o.status, o.totalDurasi || '-',
+      o.tsAccept || '', o.tsOtw || '', o.tsOnsite || '', o.tsSelesai || ''
+    ].map(esc).join(','))
+  ];
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `log-tiket-mbp-${(nf || 'all').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
 function renderMobileView() {
   if (currentUser?.role !== 'mbp') return;
   const unit = fleetList.find(m => m.namaMbp === currentUser.unit || m.id === currentUser.unit);
@@ -1387,6 +1422,11 @@ function applyServerPayload(json) {
   const rows = json.data.filter(r => r.orderId && r.orderId !== '-');
   if (currentUser?.role === 'mbp') {
     const row = rows.find(item => item.orderId === currentUser.orderId);
+    if (!row) {
+      const completedId = currentUser.orderId;
+      logout().then(() => showLoginError(`Terima kasih! Tugas tiket ${completedId} telah selesai.`));
+      return false;
+    }
     if (row && statusKey(row.status) === 'selesai') {
       orderList = [row];
       applySheetRecords([row]);
@@ -1566,6 +1606,7 @@ async function gasPost(payload, { auth = true } = {}) {
         await sbReq('/rest/v1/tickets?on_conflict=order_id', {
           method: 'POST', token, body: row, prefer: 'resolution=merge-duplicates,return=minimal', signal: sig
         });
+        notifyMbpRealtime(body.dispatchToken, token);
         json = { status: 'success' };
       }
     } else if (body.action === 'saveMaster') {
@@ -1601,7 +1642,62 @@ async function gasPost(payload, { auth = true } = {}) {
 }
 window.gasPost = gasPost;
 
-window.gasPost = gasPost;
+let rtSocket = null, rtHb = null, rtReconnect = null, rtRef = 0;
+
+function disconnectRealtime() {
+  clearInterval(rtHb);
+  clearTimeout(rtReconnect);
+  rtHb = rtReconnect = null;
+  if (rtSocket) {
+    rtSocket.onclose = null;
+    rtSocket.close();
+    rtSocket = null;
+  }
+}
+function connectRealtime() {
+  disconnectRealtime();
+  const token = getApiSessionToken();
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return;
+  const isMbp = currentUser?.role === 'mbp';
+  const wsUrl = `${SUPABASE_URL.replace(/^http/, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
+  const ws = new WebSocket(wsUrl);
+  rtSocket = ws;
+  const send = (topic, event, payload) => {
+    if (ws.readyState === 1) ws.send(JSON.stringify({ topic, event, payload, ref: String(++rtRef) }));
+  };
+  ws.onopen = () => {
+    if (isMbp) {
+      send(`realtime:ticket:${token}`, 'phx_join', { config: { broadcast: { self: false } } });
+    } else {
+      send('realtime:db-sync', 'phx_join', {
+        access_token: token,
+        config: {
+          postgres_changes: [
+            { event: '*', schema: 'public', table: 'tickets' },
+            { event: '*', schema: 'public', table: 'master_data' }
+          ]
+        }
+      });
+    }
+    rtHb = setInterval(() => send('phoenix', 'heartbeat', {}), 30000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data || '{}');
+    if (msg.event === 'postgres_changes' || msg.event === 'broadcast') syncFromServer(false);
+  };
+  ws.onclose = () => {
+    clearInterval(rtHb);
+    if (getApiSessionToken()) rtReconnect = setTimeout(connectRealtime, 3000);
+  };
+}
+
+function notifyMbpRealtime(dispatchToken, jwt) {
+  if (!dispatchToken || !jwt) return;
+  sbReq('/realtime/v1/api/broadcast', {
+    method: 'POST', token: jwt,
+    body: { messages: [{ topic: `ticket:${dispatchToken}`, event: 'sync', payload: {} }] }
+  }).catch(() => {});
+}
 
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');

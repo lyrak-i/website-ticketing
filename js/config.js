@@ -18,9 +18,6 @@ const STORAGE_KEY_MASTER = 'mbp_master_data_v1';
 const STORAGE_KEY_ADMIN_NOP = 'mbp_admin_nop_filter_v1';
 const EXPECTED_BACKEND_VERSION = 3;
 
-// Interval polling data dari backend (ms). Makin kecil makin cepat, tapi makin
-// banyak kuota Apps Script terpakai — 5 detik cukup untuk halaman MBP.
-const SYNC_INTERVAL_MS = 5000;
 // Batas waktu satu permintaan ke backend (ms) supaya koneksi yang macet tidak
 // membekukan polling selamanya.
 const SYNC_TIMEOUT_MS = 20000;
