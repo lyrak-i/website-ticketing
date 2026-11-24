@@ -212,6 +212,7 @@ async function logout() {
     localStorage.removeItem(STORAGE_KEY_FLEET);
     localStorage.removeItem(STORAGE_KEY_ORDERS);
     localStorage.removeItem(STORAGE_KEY_MASTER);
+    localStorage.removeItem(STORAGE_KEY_OFFLINE_QUEUE);
     masterData = gasWebAppUrl
       ? { personil: [], sites: [], units: [] }
       : JSON.parse(JSON.stringify(MASTER_SEED));

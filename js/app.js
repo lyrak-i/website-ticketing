@@ -420,7 +420,10 @@ function initApp() {
     connectRealtime();
   }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && gasWebAppUrl && readSession()) syncFromServer(false);
+    if (!document.hidden && gasWebAppUrl && readSession()) flushOfflineQueue().then(() => syncFromServer(false));
+  });
+  window.addEventListener('online', () => {
+    if (gasWebAppUrl && readSession()) flushOfflineQueue().then(() => syncFromServer(false));
   });
 }
 
@@ -904,11 +907,13 @@ async function updateOtwEta(unit, nowIso, nowMs) {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => processOtwWithCoords(pos.coords.latitude, pos.coords.longitude, unit, nowIso, nowMs).then(resolve, resolve),
-        () => processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs).then(resolve, resolve),
+        err => processOtwWithCoords(null, null, unit, nowIso, nowMs).then(() => {
+          if (err?.code === 1) showSyncError('Izin lokasi ditolak, ETA dicatat N/A. Aktifkan lokasi di pengaturan browser jika perlu.');
+        }).then(resolve, resolve),
         { enableHighAccuracy: true, timeout: 5000 }
       );
     } else {
-      processOtwWithCoords(-2.9833, 104.7558, unit, nowIso, nowMs).then(resolve, resolve);
+      processOtwWithCoords(null, null, unit, nowIso, nowMs).then(resolve, resolve);
     }
   });
 }
@@ -1013,9 +1018,10 @@ async function applyApproval(unit, to) {
 
 async function processOtwWithCoords(mbpLat, mbpLng, unit, nowIso, nowMs) {
   const siteObj = getSiteCoords(unit.activeSite) || (gasWebAppUrl ? null : SITE_LOCATIONS[0]);
-  const distKm = siteObj ? calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng) : 0;
-  const etaSec = siteObj ? calculateCarEtaSeconds(distKm) : 0;
-  const etaStr = siteObj ? `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)` : '-';
+  const hasCoords = mbpLat != null && mbpLng != null && siteObj;
+  const distKm = hasCoords ? calculateHaversineKm(mbpLat, mbpLng, siteObj.lat, siteObj.lng) : 0;
+  const etaSec = hasCoords ? calculateCarEtaSeconds(distKm) : 0;
+  const etaStr = hasCoords ? `${formatDurationMs(etaSec * 1000)} (${distKm.toFixed(1)} km)` : 'N/A';
 
   const order = orderList.find(o => o.orderId === unit.activeOrderId);
   if (order) {
@@ -1185,6 +1191,20 @@ function approvalCellHtml(item) {
 }
 
 function fleetApprovalCellHtml(unit) {
+  if (statusKey(unit.status) === 'belum_otw') {
+    const p = unit.pendingOrder;
+    const item = orderList.find(o => o.orderId === (p?.orderId || unit.activeOrderId));
+    const orderId = p?.orderId || item?.orderId || unit.activeOrderId;
+    const token = p?.token || item?.dispatchToken || '';
+    const site = p?.siteDestinasi || item?.siteDestinasi || unit.activeSite || '-';
+    const phone = String(unit.noWa || item?.noWa || '').replace(/\D/g, '').replace(/^0/, '62');
+   if (orderId && orderId !== '-' && token && phone) {
+      const magicUrl = buildMagicLinkUrl(orderId, unit.namaMbp, site, token);
+      const waText = `[Order ID: ${orderId}] Ada masalah di site ${site}.\n\nKlik tautan khusus ini untuk membuka tugas & update status:\n${magicUrl}`;
+      const href = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="inline-block px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition">Kirim Ulang WA</a>`;
+    }
+  }
   const oid = unit.activeOrderId;
   if (!oid || oid === '-') return '<span class="text-faint text-[11px] font-mono">-</span>';
   const item = orderList.find(o => o.orderId === oid);
@@ -1699,11 +1719,45 @@ function notifyMbpRealtime(dispatchToken, jwt) {
   }).catch(() => {});
 }
 
+let isFlushingQueue = false;
+const readOfflineQueue = () => {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY_OFFLINE_QUEUE) || '[]'); } catch { return []; }
+};
+const saveOfflineQueue = q => {
+  if (q.length) localStorage.setItem(STORAGE_KEY_OFFLINE_QUEUE, JSON.stringify(q));
+  else localStorage.removeItem(STORAGE_KEY_OFFLINE_QUEUE);
+};
+const isNetworkErr = msg => !navigator.onLine || /failed to fetch|network|load failed|tidak merespons|offline/i.test(String(msg || ''));
+
+async function flushOfflineQueue() {
+  if (isFlushingQueue || !navigator.onLine || currentUser?.role !== 'mbp') return;
+  const queue = readOfflineQueue();
+  if (!queue.length) return;
+  isFlushingQueue = true;
+  try {
+    while (queue.length) {
+      const res = await gasPost(queue[0]);
+      if (res.status !== 'success') {
+        if (isNetworkErr(res.message)) break;
+      }
+      queue.shift();
+      saveOfflineQueue(queue);
+    }
+    if (!queue.length) showFeedback();
+  } finally {
+    isFlushingQueue = false;
+  }
+}
+
 async function syncFromServer(showSpinner = false) {
   const syncText = document.getElementById('lastSyncText');
   if (!gasWebAppUrl || isSyncing) return;
   const sessionToken = getApiSessionToken();
   if (!sessionToken) return;
+  if (currentUser?.role === 'mbp' && readOfflineQueue().length) {
+    await flushOfflineQueue();
+    if (readOfflineQueue().length) return;
+  }
   isSyncing = true;
   try {
     const json = await gasPost({ action: 'read' });
@@ -1732,8 +1786,19 @@ async function postToGas(payload) {
     if (result.status === 'success') applyMasterResponse({ masterData: payload.masterData });
     return result;
   }
+  const isMbpUpdate = currentUser?.role === 'mbp' && payload.action === 'updateStatus';
+  if (isMbpUpdate && !navigator.onLine) {
+    saveOfflineQueue([...readOfflineQueue(), payload]);
+    showSyncError('Offline: tersimpan, akan dikirim saat sinyal kembali.');
+    return { status: 'queued' };
+  }
   const result = await gasPost(payload);
   if (result.status === 'success' && payload.action === 'setPassword') result.newPassword = payload.newPassword;
+  if (result.status !== 'success' && isMbpUpdate && isNetworkErr(result.message)) {
+    saveOfflineQueue([...readOfflineQueue(), payload]);
+    showSyncError('Offline: tersimpan, akan dikirim saat sinyal kembali.');
+    return { status: 'queued' };
+  }
   if (result.status !== 'success') notifySyncError(result.message || 'Gagal menyimpan ke server.');
   return result;
 }

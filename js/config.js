@@ -16,6 +16,7 @@ const STORAGE_KEY_URL = 'mbp_gas_webapp_url';
 const AUTH_SESSION_KEY = 'mbp_auth_session_v1';
 const STORAGE_KEY_MASTER = 'mbp_master_data_v1';
 const STORAGE_KEY_ADMIN_NOP = 'mbp_admin_nop_filter_v1';
+const STORAGE_KEY_OFFLINE_QUEUE = 'mbp_offline_queue_v1';
 const EXPECTED_BACKEND_VERSION = 3;
 
 // Batas waktu satu permintaan ke backend (ms) supaya koneksi yang macet tidak
